@@ -1,38 +1,94 @@
 import { useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
-import { CreditCard, Shield, ArrowLeft, CheckCircle2 } from 'lucide-react';
+import { Shield, ArrowLeft, CheckCircle2, CreditCard, Construction, Loader2 } from 'lucide-react';
 import Header from '../components/Header';
 import { Button } from '../components/ui/button';
-import { Input } from '../components/ui/input';
-import { Label } from '../components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
-import { RadioGroup, RadioGroupItem } from '../components/ui/radio-group';
-import { subscriptionPlans } from '../data/mockData';
+import { Badge } from '../components/ui/badge';
+import api from '../services/api';
+
+interface SubscriptionPlan {
+  id: string;
+  name: string;
+  price: number;
+  duration: 'monthly' | 'yearly';
+  features: string[];
+}
+
+const PLANS: SubscriptionPlan[] = [
+  {
+    id: '1',
+    name: 'Gói Tháng',
+    price: 79000,
+    duration: 'monthly',
+    features: ['Xem không giới hạn', 'Bỏ qua quảng cáo', 'HD 1080p', '2 thiết bị', 'Tải xuống offline'],
+  },
+  {
+    id: '2',
+    name: 'Gói Năm',
+    price: 799000,
+    duration: 'yearly',
+    features: ['Xem không giới hạn', 'Bỏ qua quảng cáo', '4K 2160p', '4 thiết bị', 'Tải xuống không giới hạn', 'Hỗ trợ ưu tiên'],
+  },
+];
+
+// Phương thức thanh toán
+const PAYMENT_METHODS = [
+  {
+    id: 'vnpay',
+    label: 'VNPay',
+    description: 'Ví điện tử VNPay',
+    logo: 'https://vnpay.vn/s1/statics.vnpay.vn/2023/6/0oxhzjmxbksr1686814746087.png',
+    available: true,
+  },
+  {
+    id: 'atm',
+    label: 'Thẻ ATM nội địa',
+    description: 'Các ngân hàng Việt Nam',
+    icon: 'atm',
+    available: false,
+  },
+  {
+    id: 'credit',
+    label: 'Thẻ quốc tế',
+    description: 'Visa, MasterCard',
+    icon: 'credit',
+    available: false,
+  },
+];
 
 export default function Payment() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const planId = searchParams.get('plan');
-  const plan = subscriptionPlans.find(p => p.id === planId);
+  const plan = PLANS.find(p => p.id === planId);
 
-  const [paymentMethod, setPaymentMethod] = useState('vnpay');
   const [isProcessing, setIsProcessing] = useState(false);
-  const [isSuccess, setIsSuccess] = useState(false);
+  const [error, setError] = useState('');
 
-  const handlePayment = (e: React.FormEvent) => {
+  const handlePayment = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!plan) return;
+    setError('');
     setIsProcessing(true);
 
-    // Simulate payment processing
-    setTimeout(() => {
+    try {
+      // Gọi BE tạo link VNPay
+      const res = await api.post<{ paymentUrl: string }>('/payments/create-payment', {
+        premiumPackageId: parseInt(plan.id),
+        amount: Math.round(plan.price * 1.1),
+      });
+
+      if (res.data?.paymentUrl) {
+        // Chuyển sang trang VNPay
+        window.location.href = res.data.paymentUrl;
+      } else {
+        throw new Error('Không nhận được link thanh toán');
+      }
+    } catch (err: any) {
+      setError(err?.response?.data?.message || err?.message || 'Có lỗi xảy ra khi tạo thanh toán');
       setIsProcessing(false);
-      setIsSuccess(true);
-      
-      // Redirect after success
-      setTimeout(() => {
-        navigate('/profile');
-      }, 3000);
-    }, 2000);
+    }
   };
 
   if (!plan) {
@@ -41,31 +97,7 @@ export default function Payment() {
         <Header />
         <div className="container mx-auto px-4 py-20 text-center">
           <h1 className="text-2xl mb-4">Không tìm thấy gói đăng ký</h1>
-          <Button onClick={() => navigate('/subscription')}>
-            Chọn gói đăng ký
-          </Button>
-        </div>
-      </div>
-    );
-  }
-
-  if (isSuccess) {
-    return (
-      <div className="min-h-screen bg-[#0a0a0a] text-white">
-        <Header />
-        <div className="container mx-auto px-4 py-20">
-          <Card className="max-w-md mx-auto border-green-600 bg-green-950/20 text-center">
-            <CardContent className="p-12">
-              <CheckCircle2 className="h-20 w-20 text-green-500 mx-auto mb-4" />
-              <h1 className="text-3xl font-bold mb-2">Thanh toán thành công!</h1>
-              <p className="text-gray-300 mb-6">
-                Cảm ơn bạn đã đăng ký {plan.name}. Tài khoản của bạn đã được nâng cấp.
-              </p>
-              <p className="text-sm text-gray-400">
-                Đang chuyển hướng về trang cá nhân...
-              </p>
-            </CardContent>
-          </Card>
+          <Button onClick={() => navigate('/subscription')}>Chọn gói đăng ký</Button>
         </div>
       </div>
     );
@@ -76,11 +108,7 @@ export default function Payment() {
       <Header />
 
       <div className="container mx-auto px-4 py-8">
-        <Button
-          variant="ghost"
-          className="mb-6"
-          onClick={() => navigate(-1)}
-        >
+        <Button variant="ghost" className="mb-6" onClick={() => navigate(-1)}>
           <ArrowLeft className="h-4 w-4 mr-2" />
           Quay lại
         </Button>
@@ -88,161 +116,86 @@ export default function Payment() {
         <div className="max-w-5xl mx-auto grid lg:grid-cols-3 gap-6">
           {/* Payment Form */}
           <div className="lg:col-span-2 space-y-6">
+
+            {/* Phương thức thanh toán */}
             <Card className="border-gray-800 bg-gray-900">
               <CardHeader>
                 <CardTitle>Phương thức thanh toán</CardTitle>
-                <CardDescription>Chọn phương thức thanh toán phù hợp</CardDescription>
+                <CardDescription>Hiện tại hỗ trợ thanh toán qua VNPay</CardDescription>
               </CardHeader>
-              <CardContent>
-                <RadioGroup value={paymentMethod} onValueChange={setPaymentMethod}>
-                  <div className="space-y-3">
-                    {/* VNPay */}
-                    <div className="flex items-center space-x-3 rounded-lg border border-gray-700 p-4 hover:border-red-600 transition-colors">
-                      <RadioGroupItem value="vnpay" id="vnpay" />
-                      <Label htmlFor="vnpay" className="flex-1 cursor-pointer">
-                        <div className="flex items-center gap-3">
-                          <img
-                            src="https://vnpay.vn/s1/statics.vnpay.vn/2023/6/0oxhzjmxbksr1686814746087.png"
-                            alt="VNPay"
-                            className="h-8"
-                          />
-                          <div>
-                            <p className="font-medium">VNPay</p>
-                            <p className="text-sm text-gray-400">Ví điện tử VNPay</p>
-                          </div>
-                        </div>
-                      </Label>
+              <CardContent className="space-y-3">
+                {PAYMENT_METHODS.map(method => (
+                  <div
+                    key={method.id}
+                    className={`flex items-center gap-4 rounded-lg border p-4 transition-all ${
+                      method.available
+                        ? 'border-red-600 bg-red-950/10'
+                        : 'border-gray-800 opacity-50 cursor-not-allowed'
+                    }`}
+                  >
+                    {/* Radio visual */}
+                    <div className={`h-4 w-4 rounded-full border-2 flex-shrink-0 ${
+                      method.available ? 'border-red-600 bg-red-600' : 'border-gray-600'
+                    }`}>
+                      {method.available && <div className="h-2 w-2 bg-white rounded-full m-auto mt-[1px]" />}
                     </div>
 
-                    {/* ATM Card */}
-                    <div className="flex items-center space-x-3 rounded-lg border border-gray-700 p-4 hover:border-red-600 transition-colors">
-                      <RadioGroupItem value="atm" id="atm" />
-                      <Label htmlFor="atm" className="flex-1 cursor-pointer">
-                        <div className="flex items-center gap-3">
-                          <CreditCard className="h-8 w-8 text-blue-500" />
-                          <div>
-                            <p className="font-medium">Thẻ ATM nội địa</p>
-                            <p className="text-sm text-gray-400">Các ngân hàng Việt Nam</p>
-                          </div>
-                        </div>
-                      </Label>
+                    <div className="flex items-center gap-3 flex-1">
+                      {method.logo ? (
+                        <img src={method.logo} alt={method.label} className="h-8 object-contain" />
+                      ) : (
+                        <CreditCard className={`h-8 w-8 ${method.id === 'atm' ? 'text-blue-500' : 'text-yellow-500'}`} />
+                      )}
+                      <div>
+                        <p className="font-medium">{method.label}</p>
+                        <p className="text-sm text-gray-400">{method.description}</p>
+                      </div>
                     </div>
 
-                    {/* Credit Card */}
-                    <div className="flex items-center space-x-3 rounded-lg border border-gray-700 p-4 hover:border-red-600 transition-colors">
-                      <RadioGroupItem value="credit" id="credit" />
-                      <Label htmlFor="credit" className="flex-1 cursor-pointer">
-                        <div className="flex items-center gap-3">
-                          <CreditCard className="h-8 w-8 text-yellow-500" />
-                          <div>
-                            <p className="font-medium">Thẻ quốc tế</p>
-                            <p className="text-sm text-gray-400">Visa, MasterCard</p>
-                          </div>
-                        </div>
-                      </Label>
-                    </div>
+                    {!method.available && (
+                      <Badge variant="outline" className="border-gray-700 text-gray-500 flex items-center gap-1 flex-shrink-0">
+                        <Construction className="h-3 w-3" />
+                        Đang phát triển
+                      </Badge>
+                    )}
                   </div>
-                </RadioGroup>
+                ))}
               </CardContent>
             </Card>
 
-            {/* Billing Information */}
+            {/* Thông tin thanh toán */}
             <Card className="border-gray-800 bg-gray-900">
               <CardHeader>
-                <CardTitle>Thông tin thanh toán</CardTitle>
+                <CardTitle>Xác nhận thanh toán</CardTitle>
               </CardHeader>
               <CardContent>
                 <form onSubmit={handlePayment} className="space-y-4">
-                  <div className="grid sm:grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="firstName">Họ</Label>
-                      <Input
-                        id="firstName"
-                        required
-                        className="bg-gray-800 border-gray-700"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="lastName">Tên</Label>
-                      <Input
-                        id="lastName"
-                        required
-                        className="bg-gray-800 border-gray-700"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="email">Email</Label>
-                    <Input
-                      id="email"
-                      type="email"
-                      required
-                      className="bg-gray-800 border-gray-700"
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="phone">Số điện thoại</Label>
-                    <Input
-                      id="phone"
-                      type="tel"
-                      required
-                      className="bg-gray-800 border-gray-700"
-                    />
-                  </div>
-
-                  {paymentMethod === 'credit' && (
-                    <>
-                      <div className="space-y-2">
-                        <Label htmlFor="cardNumber">Số thẻ</Label>
-                        <Input
-                          id="cardNumber"
-                          placeholder="1234 5678 9012 3456"
-                          required
-                          className="bg-gray-800 border-gray-700"
-                        />
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                          <Label htmlFor="expiry">Ngày hết hạn</Label>
-                          <Input
-                            id="expiry"
-                            placeholder="MM/YY"
-                            required
-                            className="bg-gray-800 border-gray-700"
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <Label htmlFor="cvv">CVV</Label>
-                          <Input
-                            id="cvv"
-                            placeholder="123"
-                            required
-                            className="bg-gray-800 border-gray-700"
-                          />
-                        </div>
-                      </div>
-                    </>
+                  <p className="text-gray-300 text-sm mb-4">
+                    Thông tin tài khoản của bạn sẽ được tự động liên kết với giao dịch VNPay.
+                  </p>
+                  
+                  {error && (
+                    <p className="text-red-500 text-sm">{error}</p>
                   )}
 
                   <Button
                     type="submit"
-                    className="w-full bg-red-600 hover:bg-red-700"
+                    className="w-full bg-red-600 hover:bg-red-700 gap-2"
                     disabled={isProcessing}
                   >
-                    {isProcessing ? 'Đang xử lý...' : `Thanh toán ${plan.price.toLocaleString('vi-VN')}đ`}
+                    {isProcessing
+                      ? <><Loader2 className="h-4 w-4 animate-spin" /> Đang chuyển hướng đến VNPay...</>
+                      : `Thanh toán qua VNPay — ${Math.round(plan.price * 1.1).toLocaleString('vi-VN')}đ`
+                    }
                   </Button>
                 </form>
               </CardContent>
             </Card>
 
-            {/* Security Note */}
             <div className="flex items-center gap-3 rounded-lg border border-green-800 bg-green-950/20 p-4">
-              <Shield className="h-6 w-6 text-green-500" />
+              <Shield className="h-6 w-6 text-green-500 flex-shrink-0" />
               <p className="text-sm text-gray-300">
-                Thông tin thanh toán của bạn được mã hóa và bảo mật tuyệt đối
+                Thanh toán được xử lý qua VNPay — an toàn và bảo mật
               </p>
             </div>
           </div>
@@ -261,9 +214,7 @@ export default function Payment() {
 
                 <div>
                   <p className="text-sm text-gray-400">Chu kỳ</p>
-                  <p className="font-semibold">
-                    {plan.duration === 'monthly' ? 'Hàng tháng' : 'Hàng năm'}
-                  </p>
+                  <p className="font-semibold">{plan.duration === 'monthly' ? 'Hàng tháng' : 'Hàng năm'}</p>
                 </div>
 
                 <div className="border-t border-gray-700 pt-4">
@@ -273,13 +224,11 @@ export default function Payment() {
                   </div>
                   <div className="flex justify-between mb-2">
                     <span className="text-gray-400">VAT (10%)</span>
-                    <span>{(plan.price * 0.1).toLocaleString('vi-VN')}đ</span>
+                    <span>{Math.round(plan.price * 0.1).toLocaleString('vi-VN')}đ</span>
                   </div>
                   <div className="flex justify-between text-xl font-bold border-t border-gray-700 pt-4">
                     <span>Tổng cộng</span>
-                    <span className="text-red-500">
-                      {(plan.price * 1.1).toLocaleString('vi-VN')}đ
-                    </span>
+                    <span className="text-red-500">{Math.round(plan.price * 1.1).toLocaleString('vi-VN')}đ</span>
                   </div>
                 </div>
 

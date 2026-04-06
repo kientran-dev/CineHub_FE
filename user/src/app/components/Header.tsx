@@ -13,6 +13,7 @@ import {
 } from './ui/dropdown-menu';
 import { useAuth } from '../contexts/AuthContext';
 import { genreService, type GenreResponse } from '../services/genreService';
+import { userService } from '../services/userService';
 import { countries } from '../data/mockData';
 
 function HoverDropdown({
@@ -41,7 +42,7 @@ function HoverDropdown({
 
   return (
     <div className="relative" onMouseEnter={handleEnter} onMouseLeave={handleLeave}>
-      <button className="flex items-center gap-1 text-sm hover:text-red-600 transition-colors whitespace-nowrap">
+      <button className="flex items-center gap-1 text-base hover:text-red-600 transition-colors whitespace-nowrap">
         {label}
         <ChevronDown className={`h-4 w-4 transition-transform ${open ? 'rotate-180' : ''}`} />
       </button>
@@ -78,12 +79,21 @@ export default function Header() {
   const { user, isAuthenticated, logout } = useAuth();
   const [searchQuery, setSearchQuery] = useState('');
   const [genres, setGenres] = useState<GenreResponse[]>([]);
+  const [avatarUrl, setAvatarUrl] = useState<string>('');
 
   useEffect(() => {
     genreService.getAllGenres()
       .then(setGenres)
       .catch(() => setGenres([]));
   }, []);
+
+  // Fetch profile để lấy avatar
+  useEffect(() => {
+    if (!isAuthenticated) { setAvatarUrl(''); return; }
+    userService.getMe()
+      .then(p => setAvatarUrl(p.avatar ?? ''))
+      .catch(() => setAvatarUrl(''));
+  }, [isAuthenticated]);
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -100,11 +110,11 @@ export default function Header() {
 
   return (
     <header className="sticky top-0 z-50 w-full border-b border-gray-800/50 bg-[#0a0a0a]/95 backdrop-blur-md">
-      <div className="container mx-auto flex h-16 items-center gap-6 px-4">
+      <div className="container mx-auto flex h-20 items-center gap-6 px-4">
         {/* Logo */}
         <Link to="/" className="flex items-center gap-2 text-red-600">
           <Film className="h-8 w-8" />
-          <span className="text-xl font-bold">CineHub</span>
+          <span className="text-2xl font-bold">CineHub</span>
         </Link>
 
         {/* Search */}
@@ -121,10 +131,10 @@ export default function Header() {
 
         {/* Navigation */}
         <nav className="hidden lg:flex items-center gap-6">
-          <Link to="/movies/phim-le" className="text-sm hover:text-red-600 transition-colors whitespace-nowrap">
+          <Link to="/movies/phim-le" className="text-base hover:text-red-600 transition-colors whitespace-nowrap">
             Phim lẻ
           </Link>
-          <Link to="/movies/phim-bo" className="text-sm hover:text-red-600 transition-colors whitespace-nowrap">
+          <Link to="/movies/phim-bo" className="text-base hover:text-red-600 transition-colors whitespace-nowrap">
             Phim bộ
           </Link>
           {genres.length > 0 && (
@@ -141,7 +151,7 @@ export default function Header() {
             columns={3}
             onSelect={(item) => navigate(`/movies/quoc-gia/${encodeURIComponent(item.name)}`)}
           />
-          <Link to="/movies/tv-show" className="text-sm hover:text-red-600 transition-colors whitespace-nowrap">
+          <Link to="/movies/tv-show" className="text-base hover:text-red-600 transition-colors whitespace-nowrap">
             TV Show
           </Link>
         </nav>
@@ -162,19 +172,22 @@ export default function Header() {
         {/* User Menu hoặc Đăng nhập */}
         {isAuthenticated ? (
           <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button className="relative h-10 w-10 rounded-full overflow-hidden cursor-pointer focus:outline-none focus:ring-2 focus:ring-red-600 bg-gray-700 flex items-center justify-center">
-                <span className="text-white font-bold text-sm">
-                  {displayName.charAt(0).toUpperCase()}
-                </span>
-              </button>
+            <DropdownMenuTrigger
+              className="relative h-11 w-11 rounded-full overflow-hidden cursor-pointer focus:outline-none focus:ring-2 focus:ring-red-600 bg-gray-700 flex items-center justify-center"
+            >
+              {avatarUrl
+                ? <img src={avatarUrl} alt={displayName} className="h-full w-full object-cover" />
+                : <span className="text-white font-bold text-sm">{displayName.charAt(0).toUpperCase()}</span>
+              }
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-64 bg-gray-900 border-gray-700 p-0 z-[9999]">
               <div className="flex items-start gap-3 px-4 py-3 border-b border-gray-700">
-                <Avatar className="h-12 w-12">
-                  <AvatarImage src="" alt={displayName} />
-                  <AvatarFallback className="bg-gray-700">{displayName.charAt(0)}</AvatarFallback>
-                </Avatar>
+                <div className="h-12 w-12 rounded-full overflow-hidden bg-gray-700 flex items-center justify-center flex-shrink-0">
+                  {avatarUrl
+                    ? <img src={avatarUrl} alt={displayName} className="h-full w-full object-cover" />
+                    : <span className="text-white font-bold text-lg">{displayName.charAt(0).toUpperCase()}</span>
+                  }
+                </div>
                 <div className="flex flex-col">
                   <p className="text-sm font-medium text-white">{displayName}</p>
                   <p className="text-xs text-gray-400">{displayEmail}</p>
