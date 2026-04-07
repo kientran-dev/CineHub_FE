@@ -6,8 +6,13 @@ import AccountsManagement from './pages/AccountsManagement';
 import GenresManagement from './pages/GenresManagement';
 import PremiumManagement from './pages/PremiumManagement';
 import InvoicesManagement from './pages/InvoicesManagement';
+import Login from './pages/Login';
 
 export const router = createBrowserRouter([
+  {
+    path: '/login',
+    Component: Login,
+  },
   {
     path: '/',
     Component: AdminLayout,

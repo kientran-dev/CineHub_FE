@@ -24,6 +24,8 @@ import {
   ResponsiveContainer,
 } from 'recharts';
 import { revenueData, genreDistribution, viewsData } from '../data/mockData';
+import { useState, useEffect } from 'react';
+import { dashboardService, type DashboardResponse } from '../services/adminService';
 
 const COLORS = ['#3b82f6', '#8b5cf6', '#ec4899', '#f59e0b', '#10b981', '#06b6d4', '#ef4444'];
 
@@ -63,6 +65,17 @@ function StatCard({ title, value, icon, trend, trendUp }: StatCardProps) {
 }
 
 export default function Dashboard() {
+  const [stats, setStats] = useState<DashboardResponse>({
+    totalUsers: 0,
+    totalMovies: 0,
+    premiumUsers: 0,
+    totalRevenue: 0
+  });
+
+  useEffect(() => {
+    dashboardService.getDashboardStats().then(setStats).catch(console.error);
+  }, []);
+
   const handleExportReport = () => {
     // Mock function để xuất báo cáo
     const csvContent = `Tháng,Doanh thu,Người dùng\n${revenueData
@@ -115,30 +128,30 @@ export default function Dashboard() {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <StatCard
           title="Tổng người dùng"
-          value="3,780"
+          value={new Intl.NumberFormat('vi-VN').format(stats.totalUsers)}
           icon={<Users className="text-blue-600" size={28} />}
-          trend="+12.5%"
+          trend="Realtime"
           trendUp={true}
         />
         <StatCard
           title="Tổng phim"
-          value="210"
+          value={new Intl.NumberFormat('vi-VN').format(stats.totalMovies)}
           icon={<Film className="text-purple-600" size={28} />}
-          trend="+8.3%"
+          trend="Realtime"
           trendUp={true}
         />
         <StatCard
-          title="Doanh thu tháng này"
-          value="89.000.000đ"
+          title="Doanh thu"
+          value={new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(stats.totalRevenue)}
           icon={<DollarSign className="text-green-600" size={28} />}
-          trend="+14.2%"
+          trend="Realtime"
           trendUp={true}
         />
         <StatCard
           title="Người dùng Premium"
-          value="2,700"
+          value={new Intl.NumberFormat('vi-VN').format(stats.premiumUsers)}
           icon={<TrendingUp className="text-orange-600" size={28} />}
-          trend="+18.7%"
+          trend="Realtime"
           trendUp={true}
         />
       </div>

@@ -85,6 +85,9 @@ export interface UserResponse {
   fullName: string;
   avatar: string;
   rewardPoints: number;
+  roles?: string[];
+  isPremium?: boolean;
+  registeredDate?: string;
 }
 
 export const userService = {
@@ -121,4 +124,70 @@ export const episodeService = {
   async deleteEpisode(id: number): Promise<void> {
     await api.delete(`/episodes/${id}`);
   },
+};
+
+export interface PremiumPackageResponse {
+  id: number;
+  packageName: string;
+  price: number;
+  durationDays: number;
+  description: string;
+  activeUsers: number;
+  totalRevenue: number;
+}
+
+export interface PremiumPackageRequest {
+  packageName: string;
+  price: number;
+  durationDays: number;
+  description: string;
+}
+
+export const premiumPackageService = {
+  async getAllPackages(): Promise<PremiumPackageResponse[]> {
+    const res = await api.get<PremiumPackageResponse[]>('/premium-packages');
+    return res.data;
+  },
+  async createPackage(data: PremiumPackageRequest): Promise<PremiumPackageResponse> {
+    const res = await api.post<PremiumPackageResponse>('/premium-packages', data);
+    return res.data;
+  },
+  async updatePackage(id: number, data: PremiumPackageRequest): Promise<PremiumPackageResponse> {
+    const res = await api.put<PremiumPackageResponse>(`/premium-packages/${id}`, data);
+    return res.data;
+  },
+  async deletePackage(id: number): Promise<void> {
+    await api.delete(`/premium-packages/${id}`);
+  },
+};
+
+export interface DashboardResponse {
+  totalUsers: number;
+  totalMovies: number;
+  premiumUsers: number;
+  totalRevenue: number;
+}
+
+export const dashboardService = {
+  async getDashboardStats(): Promise<DashboardResponse> {
+    const res = await api.get<DashboardResponse>('/dashboard/stats');
+    return res.data;
+  }
+};
+
+export interface PaymentResponse {
+  paymentId: number;
+  paymentUrl?: string;
+  amount: number;
+  status: string;
+  paymentDate: string;
+  username?: string;
+  packageName?: string;
+}
+
+export const paymentService = {
+  async getAllPayments(): Promise<PaymentResponse[]> {
+    const res = await api.get<PaymentResponse[]>('/payments');
+    return res.data;
+  }
 };

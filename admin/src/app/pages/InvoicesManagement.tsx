@@ -1,51 +1,70 @@
-import { useState } from 'react';
-import { Search, Eye, Download, FileText, CreditCard } from 'lucide-react';
-import { mockInvoices, Invoice } from '../data/mockData';
+import { useState, useEffect } from 'react';
+import { Search, Eye, Download, FileText, CreditCard, Loader2 } from 'lucide-react';
+import { paymentService, type PaymentResponse } from '../services/adminService';
 import { VNPayLogo } from '../components/VNPayLogo';
 
 export default function InvoicesManagement() {
-  const [invoices, setInvoices] = useState<Invoice[]>(mockInvoices);
+  const [invoices, setInvoices] = useState<PaymentResponse[]>([]);
+  const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
-  const [filterStatus, setFilterStatus] = useState<'all' | Invoice['TrangThai']>('all');
-  const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null);
+  const [filterStatus, setFilterStatus] = useState<'all' | 'SUCCESS' | 'FAILED' | 'PENDING'>('all');
+  const [selectedInvoice, setSelectedInvoice] = useState<PaymentResponse | null>(null);
+
+  const fetchInvoices = () => {
+    setLoading(true);
+    paymentService.getAllPayments()
+      .then(setInvoices)
+      .catch(console.error)
+      .finally(() => setLoading(false));
+  };
+
+  useEffect(() => {
+    fetchInvoices();
+  }, []);
 
   const filteredInvoices = invoices.filter((invoice) => {
     const matchesSearch =
-      invoice.MaTT.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      invoice.username.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      invoice.email.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesStatus = filterStatus === 'all' || invoice.TrangThai === filterStatus;
+      invoice.paymentId.toString().includes(searchTerm) ||
+      (invoice.username || '').toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesStatus = filterStatus === 'all' || invoice.status === filterStatus;
     return matchesSearch && matchesStatus;
   });
 
   const totalRevenue = invoices
-    .filter((inv) => inv.TrangThai === 'Thành công')
-    .reduce((sum, inv) => sum + inv.TongTien, 0);
+    .filter((inv) => inv.status === 'SUCCESS')
+    .reduce((sum, inv) => sum + inv.amount, 0);
 
-  const successfulTransactions = invoices.filter((inv) => inv.TrangThai === 'Thành công').length;
-  const pendingTransactions = invoices.filter((inv) => inv.TrangThai === 'Đang xử lý').length;
-  const failedTransactions = invoices.filter((inv) => inv.TrangThai === 'Thất bại').length;
+  const successfulTransactions = invoices.filter((inv) => inv.status === 'SUCCESS').length;
+  const pendingTransactions = invoices.filter((inv) => inv.status === 'PENDING').length;
+  const failedTransactions = invoices.filter((inv) => inv.status === 'FAILED').length;
 
-  const getStatusColor = (status: Invoice['TrangThai']) => {
+  const getStatusColor = (status: string) => {
     switch (status) {
-      case 'Thành công':
+      case 'SUCCESS':
         return 'bg-green-100 text-green-800';
-      case 'Đang xử lý':
+      case 'PENDING':
         return 'bg-yellow-100 text-yellow-800';
-      case 'Thất bại':
+      case 'FAILED':
         return 'bg-red-100 text-red-800';
-      case 'Hoàn tiền':
-        return 'bg-blue-100 text-blue-800';
       default:
         return 'bg-gray-100 text-gray-800';
     }
   };
 
+  const getStatusLocalName = (status: string) => {
+    switch (status) {
+      case 'SUCCESS': return 'Thành công';
+      case 'PENDING': return 'Đang xử lý';
+      case 'FAILED': return 'Thất bại';
+      default: return status;
+    }
+  }
+
   const handleExportInvoices = () => {
-    const csvContent = `Mã thanh toán,Ngày thanh toán,Phương thức,Trạng thái,Tổng tiền,Người dùng,Email,Gói premium\n${filteredInvoices
+    const csvContent = `Mã thanh toán,Ngày thanh toán,Phương thức,Trạng thái,Tổng tiền,Người dùng,Gói premium\n${filteredInvoices
       .map(
         (inv) =>
-          `${inv.MaTT},${inv.NgayThanhToan},${inv.PhuongThucThanhToan},${inv.TrangThai},${inv.TongTien},${inv.username},${inv.email},${inv.packageName}`
+          `${inv.paymentId},${inv.paymentDate},VNPAY,${getStatusLocalName(inv.status)},${inv.amount},${inv.username},${inv.packageName}`
       )
       .join('\n')}`;
 
@@ -144,7 +163,7 @@ export default function InvoicesManagement() {
             />
             <input
               type="text"
-              placeholder="Tìm kiếm theo mã, người dùng, email..."
+              placeholder="Tìm kiếm theo mã, người dùng..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -156,10 +175,9 @@ export default function InvoicesManagement() {
             className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
           >
             <option value="all">Tất cả trạng thái</option>
-            <option value="Thành công">Thành công</option>
-            <option value="Đang xử lý">Đang xử lý</option>
-            <option value="Thất bại">Thất bại</option>
-            <option value="Hoàn tiền">Hoàn tiền</option>
+            <option value="SUCCESS">Thành công</option>
+            <option value="PENDING">Đang xử lý</option>
+            <option value="FAILED">Thất bại</option>
           </select>
           <div className="text-gray-600 flex items-center">
             Tổng số:{' '}
@@ -170,88 +188,93 @@ export default function InvoicesManagement() {
 
       {/* Table */}
       <div className="bg-white rounded-lg shadow overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead className="bg-gray-50 border-b border-gray-200">
-              <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Mã thanh toán
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Ngày thanh toán
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Người dùng
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Gói Premium
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Phương thức
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Tổng tiền
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Trạng thái
-                </th>
-                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Thao tác
-                </th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
-              {filteredInvoices.map((invoice) => (
-                <tr key={invoice.MaTT} className="hover:bg-gray-50">
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm font-medium text-gray-900">{invoice.MaTT}</div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {new Date(invoice.NgayThanhToan).toLocaleString('vi-VN')}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm text-gray-900">{invoice.username}</div>
-                    <div className="text-xs text-gray-500">{invoice.email}</div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {invoice.packageName}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="flex items-center gap-2">
-                      <VNPayLogo />
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-900">
-                    {new Intl.NumberFormat('vi-VN', {
-                      style: 'currency',
-                      currency: 'VND',
-                    }).format(invoice.TongTien)}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <span
-                      className={`px-2 py-1 text-xs rounded-full ${getStatusColor(
-                        invoice.TrangThai
-                      )}`}
-                    >
-                      {invoice.TrangThai}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-right text-sm">
-                    <button
-                      onClick={() => setSelectedInvoice(invoice)}
-                      className="text-blue-600 hover:text-blue-800 p-1"
-                    >
-                      <Eye size={18} />
-                    </button>
-                  </td>
+        {loading ? (
+          <div className="flex justify-center py-16">
+             <Loader2 className="h-10 w-10 animate-spin text-blue-600" />
+           </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead className="bg-gray-50 border-b border-gray-200">
+                <tr>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Mã thanh toán
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Ngày thanh toán
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Người dùng
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Gói Premium
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Phương thức
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Tổng tiền
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Trạng thái
+                  </th>
+                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Thao tác
+                  </th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {filteredInvoices.map((invoice) => (
+                  <tr key={invoice.paymentId} className="hover:bg-gray-50">
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="text-sm font-medium text-gray-900">{invoice.paymentId}</div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      {new Date(invoice.paymentDate).toLocaleString('vi-VN')}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="text-sm text-gray-900">{invoice.username || '-'}</div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      {invoice.packageName || '-'}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="flex items-center gap-2">
+                        <VNPayLogo />
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-900">
+                      {new Intl.NumberFormat('vi-VN', {
+                        style: 'currency',
+                        currency: 'VND',
+                      }).format(invoice.amount)}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <span
+                        className={`px-2 py-1 text-xs rounded-full ${getStatusColor(
+                          invoice.status
+                        )}`}
+                      >
+                        {getStatusLocalName(invoice.status)}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm">
+                      <button
+                        onClick={() => setSelectedInvoice(invoice)}
+                        className="text-blue-600 hover:text-blue-800 p-1"
+                      >
+                        <Eye size={18} />
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
 
-      {filteredInvoices.length === 0 && (
+      {filteredInvoices.length === 0 && !loading && (
         <div className="text-center py-12 text-gray-500">Không tìm thấy giao dịch nào</div>
       )}
 
@@ -273,12 +296,12 @@ export default function InvoicesManagement() {
               <div className="grid grid-cols-2 gap-4 pb-4 border-b">
                 <div>
                   <p className="text-sm text-gray-500">Mã thanh toán</p>
-                  <p className="font-semibold">{selectedInvoice.MaTT}</p>
+                  <p className="font-semibold">{selectedInvoice.paymentId}</p>
                 </div>
                 <div>
                   <p className="text-sm text-gray-500">Ngày thanh toán</p>
                   <p className="font-semibold">
-                    {new Date(selectedInvoice.NgayThanhToan).toLocaleString('vi-VN')}
+                    {new Date(selectedInvoice.paymentDate).toLocaleString('vi-VN')}
                   </p>
                 </div>
               </div>
@@ -286,18 +309,7 @@ export default function InvoicesManagement() {
               <div className="grid grid-cols-2 gap-4 pb-4 border-b">
                 <div>
                   <p className="text-sm text-gray-500">Tên người dùng</p>
-                  <p className="font-semibold">{selectedInvoice.username}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-gray-500">Email</p>
-                  <p className="font-semibold">{selectedInvoice.email}</p>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4 pb-4 border-b">
-                <div>
-                  <p className="text-sm text-gray-500">Gói Premium</p>
-                  <p className="font-semibold">{selectedInvoice.packageName}</p>
+                  <p className="font-semibold">{selectedInvoice.username || '-'}</p>
                 </div>
                 <div>
                   <p className="text-sm text-gray-500">Phương thức thanh toán</p>
@@ -309,23 +321,30 @@ export default function InvoicesManagement() {
 
               <div className="grid grid-cols-2 gap-4 pb-4 border-b">
                 <div>
+                  <p className="text-sm text-gray-500">Gói Premium</p>
+                  <p className="font-semibold">{selectedInvoice.packageName || '-'}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-gray-500">Trạng thái</p>
+                  <span
+                    className={`inline-block px-3 py-1 text-sm mt-1 rounded-full ${getStatusColor(
+                      selectedInvoice.status
+                    )}`}
+                  >
+                    {getStatusLocalName(selectedInvoice.status)}
+                  </span>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4 pb-4 border-b">
+                <div>
                   <p className="text-sm text-gray-500">Tổng tiền</p>
                   <p className="text-xl font-bold text-blue-600">
                     {new Intl.NumberFormat('vi-VN', {
                       style: 'currency',
                       currency: 'VND',
-                    }).format(selectedInvoice.TongTien)}
+                    }).format(selectedInvoice.amount)}
                   </p>
-                </div>
-                <div>
-                  <p className="text-sm text-gray-500">Trạng thái</p>
-                  <span
-                    className={`inline-block px-3 py-1 text-sm rounded-full ${getStatusColor(
-                      selectedInvoice.TrangThai
-                    )}`}
-                  >
-                    {selectedInvoice.TrangThai}
-                  </span>
                 </div>
               </div>
             </div>
