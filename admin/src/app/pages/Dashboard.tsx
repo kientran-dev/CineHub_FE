@@ -4,7 +4,8 @@ import {
   TrendingUp, 
   DollarSign,
   Download,
-  FileSpreadsheet
+  FileSpreadsheet,
+  Loader2
 } from 'lucide-react';
 import {
   AreaChart,
@@ -23,9 +24,13 @@ import {
   Legend,
   ResponsiveContainer,
 } from 'recharts';
-import { revenueData, genreDistribution, viewsData } from '../data/mockData';
 import { useState, useEffect } from 'react';
-import { dashboardService, type DashboardResponse } from '../services/adminService';
+import { 
+  dashboardService, 
+  type DashboardResponse, 
+  type DashboardChartData 
+} from '../services/adminService';
+import * as XLSX from 'xlsx';
 
 const COLORS = ['#3b82f6', '#8b5cf6', '#ec4899', '#f59e0b', '#10b981', '#06b6d4', '#ef4444'];
 
@@ -72,31 +77,108 @@ export default function Dashboard() {
     totalRevenue: 0
   });
 
+  const [chartData, setChartData] = useState<DashboardChartData>({
+    revenueByMonth: [],
+    genreDistribution: [],
+    viewsByDay: [],
+    userGrowthByMonth: []
+  });
+
+  const [loading, setLoading] = useState(true);
+  const [exporting, setExporting] = useState<string | null>(null);
+
   useEffect(() => {
-    dashboardService.getDashboardStats().then(setStats).catch(console.error);
+    Promise.all([
+      dashboardService.getDashboardStats(),
+      dashboardService.getChartData()
+    ]).then(([statsData, charts]) => {
+      setStats(statsData);
+      setChartData(charts);
+    }).catch(console.error)
+    .finally(() => setLoading(false));
   }, []);
 
-  const handleExportReport = () => {
-    // Mock function để xuất báo cáo
-    const csvContent = `Tháng,Doanh thu,Người dùng\n${revenueData
-      .map((item) => `${item.month},${item.revenue},${item.users}`)
-      .join('\n')}`;
-    
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
-    const url = URL.createObjectURL(blob);
-    link.setAttribute('href', url);
-    link.setAttribute('download', `bao-cao-doanh-thu-${new Date().getTime()}.csv`);
-    link.style.visibility = 'hidden';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+  const handleExportCsv = async () => {
+    try {
+      setExporting('csv');
+      const blob = await dashboardService.exportCsv();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.setAttribute('href', url);
+      link.setAttribute('download', `bao-cao-doanh-thu-${new Date().getTime()}.csv`);
+      link.style.visibility = 'hidden';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Export CSV failed:', error);
+      alert('Xuất báo cáo CSV thất bại!');
+    } finally {
+      setExporting(null);
+    }
   };
 
-  const handleExportExcel = () => {
-    // Mock function để xuất Excel
-    alert('Xuất file Excel (tích hợp với thư viện như xlsx hoặc exceljs khi cần)');
+  const handleExportExcel = async () => {
+    try {
+      setExporting('excel');
+
+      // Sheet 1: Doanh thu theo tháng
+      const revenueSheet = XLSX.utils.json_to_sheet(
+        chartData.revenueByMonth.map(item => ({
+          'Tháng': item.month,
+          'Doanh thu (VND)': item.revenue,
+          'Người dùng mới': item.users
+        }))
+      );
+
+      // Sheet 2: Phân bố thể loại
+      const genreSheet = XLSX.utils.json_to_sheet(
+        chartData.genreDistribution.map(item => ({
+          'Thể loại': item.name,
+          'Số phim': item.value
+        }))
+      );
+
+      // Sheet 3: Lượt xem
+      const viewsSheet = XLSX.utils.json_to_sheet(
+        chartData.viewsByDay.map(item => ({
+          'Ngày': item.day,
+          'Lượt xem': item.views
+        }))
+      );
+
+      // Sheet 4: Tổng quan
+      const summarySheet = XLSX.utils.json_to_sheet([{
+        'Tổng người dùng': stats.totalUsers,
+        'Tổng phim': stats.totalMovies,
+        'Người dùng Premium': stats.premiumUsers,
+        'Tổng doanh thu (VND)': stats.totalRevenue
+      }]);
+
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, summarySheet, 'Tổng quan');
+      XLSX.utils.book_append_sheet(wb, revenueSheet, 'Doanh thu');
+      XLSX.utils.book_append_sheet(wb, genreSheet, 'Thể loại');
+      XLSX.utils.book_append_sheet(wb, viewsSheet, 'Lượt xem');
+
+      XLSX.writeFile(wb, `bao-cao-cinehub-${new Date().getTime()}.xlsx`);
+    } catch (error) {
+      console.error('Export Excel failed:', error);
+      alert('Xuất báo cáo Excel thất bại!');
+    } finally {
+      setExporting(null);
+    }
   };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-96">
+        <Loader2 className="animate-spin text-blue-600" size={48} />
+        <span className="ml-3 text-gray-600 text-lg">Đang tải dữ liệu...</span>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -108,17 +190,19 @@ export default function Dashboard() {
         </div>
         <div className="flex gap-3">
           <button
-            onClick={handleExportReport}
-            className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+            onClick={handleExportCsv}
+            disabled={exporting !== null}
+            className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            <Download size={18} />
+            {exporting === 'csv' ? <Loader2 size={18} className="animate-spin" /> : <Download size={18} />}
             Xuất CSV
           </button>
           <button
             onClick={handleExportExcel}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            disabled={exporting !== null}
+            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            <FileSpreadsheet size={18} />
+            {exporting === 'excel' ? <Loader2 size={18} className="animate-spin" /> : <FileSpreadsheet size={18} />}
             Xuất Excel
           </button>
         </div>
@@ -161,37 +245,43 @@ export default function Dashboard() {
         {/* Revenue Chart */}
         <div className="bg-white rounded-lg shadow p-6">
           <h3 className="text-lg font-semibold text-gray-800 mb-4">
-            Doanh thu theo tháng
+            Doanh thu theo tháng ({new Date().getFullYear()})
           </h3>
-          <ResponsiveContainer width="100%" height={300}>
-            <AreaChart data={revenueData}>
-              <defs>
-                <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.8} />
-                  <stop offset="95%" stopColor="#3b82f6" stopOpacity={0.1} />
-                </linearGradient>
-              </defs>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="month" />
-              <YAxis />
-              <Tooltip
-                formatter={(value: number) =>
-                  new Intl.NumberFormat('vi-VN', {
-                    style: 'currency',
-                    currency: 'VND',
-                  }).format(value)
-                }
-              />
-              <Area
-                type="monotone"
-                dataKey="revenue"
-                stroke="#3b82f6"
-                fillOpacity={1}
-                fill="url(#colorRevenue)"
-                name="Doanh thu"
-              />
-            </AreaChart>
-          </ResponsiveContainer>
+          {chartData.revenueByMonth.length > 0 ? (
+            <ResponsiveContainer width="100%" height={300}>
+              <AreaChart data={chartData.revenueByMonth}>
+                <defs>
+                  <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.8} />
+                    <stop offset="95%" stopColor="#3b82f6" stopOpacity={0.1} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="month" />
+                <YAxis />
+                <Tooltip
+                  formatter={(value: number) =>
+                    new Intl.NumberFormat('vi-VN', {
+                      style: 'currency',
+                      currency: 'VND',
+                    }).format(value)
+                  }
+                />
+                <Area
+                  type="monotone"
+                  dataKey="revenue"
+                  stroke="#3b82f6"
+                  fillOpacity={1}
+                  fill="url(#colorRevenue)"
+                  name="Doanh thu"
+                />
+              </AreaChart>
+            </ResponsiveContainer>
+          ) : (
+            <div className="flex items-center justify-center h-[300px] text-gray-400">
+              Chưa có dữ liệu doanh thu
+            </div>
+          )}
         </div>
 
         {/* Genre Distribution */}
@@ -199,30 +289,36 @@ export default function Dashboard() {
           <h3 className="text-lg font-semibold text-gray-800 mb-4">
             Phân bố phim theo thể loại
           </h3>
-          <ResponsiveContainer width="100%" height={300}>
-            <PieChart>
-              <Pie
-                data={genreDistribution}
-                cx="50%"
-                cy="50%"
-                labelLine={false}
-                label={({ name, percent }) =>
-                  `${name} ${(percent * 100).toFixed(0)}%`
-                }
-                outerRadius={100}
-                fill="#8884d8"
-                dataKey="value"
-              >
-                {genreDistribution.map((entry, index) => (
-                  <Cell
-                    key={`cell-${index}`}
-                    fill={COLORS[index % COLORS.length]}
-                  />
-                ))}
-              </Pie>
-              <Tooltip />
-            </PieChart>
-          </ResponsiveContainer>
+          {chartData.genreDistribution.length > 0 ? (
+            <ResponsiveContainer width="100%" height={300}>
+              <PieChart>
+                <Pie
+                  data={chartData.genreDistribution}
+                  cx="50%"
+                  cy="50%"
+                  labelLine={false}
+                  label={({ name, percent }) =>
+                    `${name} ${(percent * 100).toFixed(0)}%`
+                  }
+                  outerRadius={100}
+                  fill="#8884d8"
+                  dataKey="value"
+                >
+                  {chartData.genreDistribution.map((_entry, index) => (
+                    <Cell
+                      key={`cell-${index}`}
+                      fill={COLORS[index % COLORS.length]}
+                    />
+                  ))}
+                </Pie>
+                <Tooltip />
+              </PieChart>
+            </ResponsiveContainer>
+          ) : (
+            <div className="flex items-center justify-center h-[300px] text-gray-400">
+              Chưa có dữ liệu thể loại
+            </div>
+          )}
         </div>
       </div>
 
@@ -231,44 +327,56 @@ export default function Dashboard() {
         {/* Views Chart */}
         <div className="bg-white rounded-lg shadow p-6">
           <h3 className="text-lg font-semibold text-gray-800 mb-4">
-            Lượt xem trong tuần
+            Lượt xem 7 ngày gần nhất
           </h3>
-          <ResponsiveContainer width="100%" height={300}>
-            <BarChart data={viewsData}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="day" />
-              <YAxis />
-              <Tooltip
-                formatter={(value: number) =>
-                  new Intl.NumberFormat('vi-VN').format(value)
-                }
-              />
-              <Bar dataKey="views" fill="#8b5cf6" name="Lượt xem" />
-            </BarChart>
-          </ResponsiveContainer>
+          {chartData.viewsByDay.length > 0 ? (
+            <ResponsiveContainer width="100%" height={300}>
+              <BarChart data={chartData.viewsByDay}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="day" />
+                <YAxis />
+                <Tooltip
+                  formatter={(value: number) =>
+                    new Intl.NumberFormat('vi-VN').format(value)
+                  }
+                />
+                <Bar dataKey="views" fill="#8b5cf6" name="Lượt xem" />
+              </BarChart>
+            </ResponsiveContainer>
+          ) : (
+            <div className="flex items-center justify-center h-[300px] text-gray-400">
+              Chưa có dữ liệu lượt xem
+            </div>
+          )}
         </div>
 
         {/* User Growth */}
         <div className="bg-white rounded-lg shadow p-6">
           <h3 className="text-lg font-semibold text-gray-800 mb-4">
-            Tăng trưởng người dùng
+            Tăng trưởng người dùng ({new Date().getFullYear()})
           </h3>
-          <ResponsiveContainer width="100%" height={300}>
-            <LineChart data={revenueData}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="month" />
-              <YAxis />
-              <Tooltip />
-              <Legend />
-              <Line
-                type="monotone"
-                dataKey="users"
-                stroke="#10b981"
-                strokeWidth={2}
-                name="Người dùng"
-              />
-            </LineChart>
-          </ResponsiveContainer>
+          {chartData.userGrowthByMonth.length > 0 ? (
+            <ResponsiveContainer width="100%" height={300}>
+              <LineChart data={chartData.userGrowthByMonth}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="month" />
+                <YAxis />
+                <Tooltip />
+                <Legend />
+                <Line
+                  type="monotone"
+                  dataKey="users"
+                  stroke="#10b981"
+                  strokeWidth={2}
+                  name="Người dùng mới"
+                />
+              </LineChart>
+            </ResponsiveContainer>
+          ) : (
+            <div className="flex items-center justify-center h-[300px] text-gray-400">
+              Chưa có dữ liệu tăng trưởng
+            </div>
+          )}
         </div>
       </div>
     </div>

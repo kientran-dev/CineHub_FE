@@ -1,7 +1,8 @@
 import api from './api';
 
 export interface GenreResponse { id: number; name: string; }
-export interface EpisodeResponse { id: number; movieId: number; episodeNumber: number; episodeName: string; videoUrl: string; serverName: string; }
+export interface EpisodeVersionResponse { id: number; episodeId: number; videoUrl: string; type: string; }
+export interface EpisodeResponse { id: number; movieId: number; episodeNumber: number; episodeName: string; episodeVersions?: EpisodeVersionResponse[]; }
 export interface ActorResponse { id: number; fullName: string; imageUrl: string; }
 
 export interface MovieResponse {
@@ -36,6 +37,7 @@ export interface MovieRequest {
   status?: string;
   type?: string;
   imdbScore?: number;
+  genreIds?: number[];
 }
 
 export const movieService = {
@@ -104,8 +106,12 @@ export interface EpisodeRequest {
   movieId: number;
   episodeNumber: number;
   episodeName: string;
+}
+
+export interface EpisodeVersionRequest {
+  episodeId: number;
   videoUrl: string;
-  serverName?: string;
+  type: string;
 }
 
 export const episodeService = {
@@ -124,6 +130,16 @@ export const episodeService = {
   async deleteEpisode(id: number): Promise<void> {
     await api.delete(`/episodes/${id}`);
   },
+};
+
+export const episodeVersionService = {
+  async createVersion(data: EpisodeVersionRequest): Promise<EpisodeVersionResponse> {
+    const res = await api.post<EpisodeVersionResponse>('/episode-versions', data);
+    return res.data;
+  },
+  async deleteVersion(id: number): Promise<void> {
+    await api.delete(`/episode-versions/${id}`);
+  }
 };
 
 export interface PremiumPackageResponse {
@@ -168,9 +184,42 @@ export interface DashboardResponse {
   totalRevenue: number;
 }
 
+export interface MonthlyRevenue {
+  month: string;
+  revenue: number;
+  users: number;
+}
+
+export interface GenreCount {
+  name: string;
+  value: number;
+}
+
+export interface DailyViews {
+  day: string;
+  views: number;
+}
+
+export interface DashboardChartData {
+  revenueByMonth: MonthlyRevenue[];
+  genreDistribution: GenreCount[];
+  viewsByDay: DailyViews[];
+  userGrowthByMonth: MonthlyRevenue[];
+}
+
 export const dashboardService = {
   async getDashboardStats(): Promise<DashboardResponse> {
     const res = await api.get<DashboardResponse>('/dashboard/stats');
+    return res.data;
+  },
+  async getChartData(): Promise<DashboardChartData> {
+    const res = await api.get<DashboardChartData>('/dashboard/charts');
+    return res.data;
+  },
+  async exportCsv(): Promise<Blob> {
+    const res = await api.get('/dashboard/export', {
+      responseType: 'blob',
+    });
     return res.data;
   }
 };

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Search, Plus, Edit, Trash2, Loader2 } from 'lucide-react';
-import { movieService, type MovieResponse, type MovieRequest } from '../services/adminService';
+import { movieService, genreService, type MovieResponse, type MovieRequest, type GenreResponse } from '../services/adminService';
+import EpisodeManager from '../components/EpisodeManager';
 
 export default function MoviesManagement() {
   const [movies, setMovies] = useState<MovieResponse[]>([]);
@@ -11,16 +12,26 @@ export default function MoviesManagement() {
   const [editingMovie, setEditingMovie] = useState<MovieResponse | null>(null);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState<Partial<MovieRequest>>({});
+  const [activeTab, setActiveTab] = useState<'info' | 'episodes'>('info');
+  const [genresList, setGenresList] = useState<GenreResponse[]>([]);
 
-  const fetchMovies = () => {
+  const fetchData = async () => {
     setLoading(true);
-    movieService.getAllMovies()
-      .then(setMovies)
-      .catch(console.error)
-      .finally(() => setLoading(false));
+    try {
+      const [moviesData, genresData] = await Promise.all([
+        movieService.getAllMovies(),
+        genreService.getAllGenres()
+      ]);
+      setMovies(moviesData);
+      setGenresList(genresData);
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  useEffect(() => { fetchMovies(); }, []);
+  useEffect(() => { fetchData(); }, []);
 
   const filteredMovies = movies.filter((movie) => {
     const matchesSearch = movie.title.toLowerCase().includes(searchTerm.toLowerCase());
@@ -40,6 +51,7 @@ export default function MoviesManagement() {
 
   const handleEdit = (movie: MovieResponse) => {
     setEditingMovie(movie);
+    setActiveTab('info');
     setForm({
       title: movie.title,
       englishTitle: movie.englishTitle,
@@ -51,14 +63,28 @@ export default function MoviesManagement() {
       status: movie.status,
       type: movie.type,
       imdbScore: movie.imdbScore,
+      genreIds: movie.genres?.map(g => g.id) || [],
     });
     setIsModalOpen(true);
   };
 
   const handleAddNew = () => {
     setEditingMovie(null);
-    setForm({ type: 'MOVIE', status: 'RELEASED' });
+    setActiveTab('info');
+    setForm({ type: 'MOVIE', status: 'RELEASED', genreIds: [] });
     setIsModalOpen(true);
+  };
+
+  const handleToggleGenre = (genreId: number) => {
+    setForm(prev => {
+      const current = prev.genreIds || [];
+      return {
+        ...prev,
+        genreIds: current.includes(genreId)
+          ? current.filter(id => id !== genreId)
+          : [...current, genreId]
+      };
+    });
   };
 
   const handleSave = async (e: React.FormEvent) => {
@@ -118,6 +144,7 @@ export default function MoviesManagement() {
             <option value="all">Tất cả loại</option>
             <option value="MOVIE">Phim lẻ</option>
             <option value="SERIES">Phim bộ</option>
+            <option value="TV_SHOW">TV Show</option>
           </select>
           <div className="text-gray-600 flex items-center">
             Tổng số: <span className="font-semibold ml-2">{filteredMovies.length} phim</span>
@@ -177,8 +204,8 @@ export default function MoviesManagement() {
                       ) : '-'}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm">
-                      <span className={`px-2 py-1 rounded-full text-xs ${movie.type === 'SERIES' ? 'bg-purple-100 text-purple-700' : 'bg-green-100 text-green-700'}`}>
-                        {movie.type === 'SERIES' ? 'Phim bộ' : 'Phim lẻ'}
+                      <span className={`px-2 py-1 rounded-full text-xs ${movie.type === 'SERIES' ? 'bg-purple-100 text-purple-700' : movie.type === 'TV_SHOW' ? 'bg-orange-100 text-orange-700' : 'bg-green-100 text-green-700'}`}>
+                        {movie.type === 'SERIES' ? 'Phim bộ' : movie.type === 'TV_SHOW' ? 'TV Show' : 'Phim lẻ'}
                       </span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{movie.status}</td>
@@ -208,9 +235,19 @@ export default function MoviesManagement() {
       {isModalOpen && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-lg max-w-lg w-full p-6 max-h-[90vh] overflow-y-auto">
-            <h2 className="text-xl font-semibold mb-4">
-              {editingMovie ? 'Chỉnh sửa phim' : 'Thêm phim mới'}
-            </h2>
+            <div className="flex items-center justify-between mb-4 border-b pb-2">
+              <h2 className="text-xl font-semibold">
+                {editingMovie ? 'Chỉnh sửa phim' : 'Thêm phim mới'}
+              </h2>
+              {editingMovie && (
+                <div className="flex gap-2">
+                  <button onClick={() => setActiveTab('info')} className={`px-3 py-1.5 text-sm rounded ${activeTab === 'info' ? 'bg-blue-100 text-blue-700 font-medium' : 'text-gray-600 hover:bg-gray-100'}`}>Thông tin chung</button>
+                  <button onClick={() => setActiveTab('episodes')} className={`px-3 py-1.5 text-sm rounded ${activeTab === 'episodes' ? 'bg-blue-100 text-blue-700 font-medium' : 'text-gray-600 hover:bg-gray-100'}`}>Quản lý tập & Video</button>
+                </div>
+              )}
+            </div>
+
+            {activeTab === 'info' ? (
             <form onSubmit={handleSave} className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div>
@@ -242,8 +279,19 @@ export default function MoviesManagement() {
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Quốc gia</label>
-                  <input value={form.country || ''} onChange={e => setForm(p => ({...p, country: e.target.value}))}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                  <select value={form.country || ''} onChange={e => setForm(p => ({...p, country: e.target.value}))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    <option value="">Chọn quốc gia</option>
+                    <option value="Mỹ">Mỹ</option>
+                    <option value="Hàn Quốc">Hàn Quốc</option>
+                    <option value="Trung Quốc">Trung Quốc</option>
+                    <option value="Nhật Bản">Nhật Bản</option>
+                    <option value="Việt Nam">Việt Nam</option>
+                    <option value="Thái Lan">Thái Lan</option>
+                    <option value="Anh">Anh</option>
+                    <option value="Pháp">Pháp</option>
+                    <option value="Khác">Khác</option>
+                  </select>
                 </div>
               </div>
               <div className="grid grid-cols-3 gap-4">
@@ -258,6 +306,7 @@ export default function MoviesManagement() {
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
                     <option value="MOVIE">Phim lẻ</option>
                     <option value="SERIES">Phim bộ</option>
+                    <option value="TV_SHOW">TV Show</option>
                   </select>
                 </div>
                 <div>
@@ -275,7 +324,29 @@ export default function MoviesManagement() {
                 <input type="number" step="0.1" min="0" max="10" value={form.imdbScore || ''} onChange={e => setForm(p => ({...p, imdbScore: parseFloat(e.target.value)}))}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
               </div>
-              <div className="flex gap-3 pt-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Thể loại phim</label>
+                <div className="flex flex-wrap gap-2">
+                  {genresList.map(genre => {
+                    const isSelected = (form.genreIds || []).includes(genre.id);
+                    return (
+                      <button
+                        key={genre.id}
+                        type="button"
+                        onClick={() => handleToggleGenre(genre.id)}
+                        className={`px-3 py-1 text-xs rounded-full border transition-colors ${
+                          isSelected 
+                            ? 'bg-blue-600 text-white border-blue-600' 
+                            : 'bg-white text-gray-600 border-gray-300 hover:border-blue-400'
+                        }`}
+                      >
+                        {genre.name}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+              <div className="flex gap-3 pt-4 border-t mt-4">
                 <button type="button" onClick={() => setIsModalOpen(false)}
                   className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50">
                   Hủy
@@ -287,6 +358,14 @@ export default function MoviesManagement() {
                 </button>
               </div>
             </form>
+            ) : editingMovie ? (
+              <div>
+                <EpisodeManager movieId={editingMovie.id} movieType={editingMovie.type || 'MOVIE'} />
+                <div className="flex justify-end pt-4 border-t mt-4">
+                  <button type="button" onClick={() => setIsModalOpen(false)} className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50">Đóng</button>
+                </div>
+              </div>
+            ) : null}
           </div>
         </div>
       )}
