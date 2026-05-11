@@ -40,6 +40,7 @@ export interface MovieResponse {
   status?: string;
   type?: string; // "MOVIE" | "SERIES" | "TV_SHOW"
   imdbScore?: number;
+  trailerUrl?: string;
   averageRating?: number;
   totalRatings?: number;
   genres?: GenreResponse[];
@@ -70,5 +71,16 @@ export const movieService = {
 
   async deleteMovie(id: number): Promise<void> {
     await api.delete(`/movies/${id}`);
+  },
+
+  // Recommendation System APIs
+  async getRecommendations(): Promise<MovieResponse[]> {
+    const res = await api.get<MovieResponse[]>('/recommendations');
+    return res.data;
+  },
+
+  async getSimilarMovies(movieId: number | string): Promise<MovieResponse[]> {
+    const res = await api.get<MovieResponse[]>(`/recommendations/similar/${movieId}`);
+    return res.data;
   },
 };

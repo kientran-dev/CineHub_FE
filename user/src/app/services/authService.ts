@@ -38,6 +38,11 @@ export const authService = {
     return res.data;
   },
 
+  async googleLogin(idToken: string): Promise<AuthResponse> {
+    const res = await api.post<AuthResponse>('/auth/google', { idToken });
+    return res.data;
+  },
+
   async logout(refreshToken: string): Promise<void> {
     await api.post('/auth/logout', { refreshToken });
   },
@@ -45,6 +50,14 @@ export const authService = {
   async refreshToken(refreshToken: string): Promise<AuthResponse> {
     const res = await api.post<AuthResponse>('/auth/refresh', { refreshToken });
     return res.data;
+  },
+
+  async forgotPassword(email: string): Promise<void> {
+    await api.post('/auth/forgot-password', { email });
+  },
+
+  async resetPassword(email: string, otp: string, newPassword: string): Promise<void> {
+    await api.post('/auth/reset-password', { email, otp, newPassword });
   },
 
   saveTokens(data: AuthResponse) {

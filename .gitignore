@@ -1,6 +1,9 @@
 # Chỉ push user/ và admin/ — bỏ qua backend Java
 CineHub/
 
+# Backup videos
+user/public/*.mp4
+
 # Node modules
 node_modules/
 **/node_modules/
@@ -12,6 +15,7 @@ build/
 **/build/
 
 # Environment files
+user/.env
 .env
 .env.local
 .env.*.local

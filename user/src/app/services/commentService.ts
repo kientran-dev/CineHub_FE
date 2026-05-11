@@ -5,7 +5,10 @@ export interface CommentResponse {
   content: string;
   createdDate: string;
   username: string;
+  fullName?: string;
   userAvatar: string;
+  likes: number;
+  dislikes: number;
   replies: CommentResponse[];
 }
 
@@ -28,5 +31,12 @@ export const commentService = {
 
   async deleteComment(id: number): Promise<void> {
     await api.delete(`/comments/${id}`);
+  },
+
+  async toggleReaction(commentId: number, type: 'LIKE' | 'DISLIKE'): Promise<string> {
+    const res = await api.post<string>(`/comments/${commentId}/reaction`, null, {
+      params: { type },
+    });
+    return res.data;
   },
 };

@@ -20,4 +20,8 @@ export const ratingService = {
       return null;
     }
   },
+
+  async deleteRating(movieId: number | string): Promise<void> {
+    await api.delete(`/ratings/movie/${movieId}`);
+  },
 };

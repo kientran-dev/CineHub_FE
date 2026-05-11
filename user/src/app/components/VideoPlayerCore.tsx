@@ -55,7 +55,7 @@ export default function VideoPlayerCore({
   const [hoverTime, setHoverTime] = useState<number | null>(null);
   const [hoverX, setHoverX] = useState(0);
 
-  // ── Init HLS ────────────────────────────────────────────────────────────────
+  // ── Init HLS or MP4 ─────────────────────────────────────────────────────────
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
@@ -72,6 +72,31 @@ export default function VideoPlayerCore({
       hlsRef.current = null;
     }
 
+    // Detect MP4 — play natively
+    const isMp4 = src.toLowerCase().endsWith('.mp4') || src.toLowerCase().includes('.mp4?');
+    if (isMp4) {
+      video.src = src;
+      video.load();
+      const onLoaded = () => {
+        setLoading(false);
+        if (storageKey) {
+          const saved = parseFloat(localStorage.getItem(`cinehub-progress-${storageKey}`) || '0');
+          if (saved > 10) video.currentTime = saved;
+        }
+      };
+      const onErr = () => {
+        setError('Không thể tải video. Vui lòng thử lại sau.');
+        setLoading(false);
+      };
+      video.addEventListener('loadedmetadata', onLoaded, { once: true });
+      video.addEventListener('error', onErr, { once: true });
+      return () => {
+        video.removeEventListener('loadedmetadata', onLoaded);
+        video.removeEventListener('error', onErr);
+      };
+    }
+
+    // HLS stream
     if (Hls.isSupported()) {
       const hls = new Hls({
         enableWorker: true,
@@ -118,7 +143,7 @@ export default function VideoPlayerCore({
       hlsRef.current?.destroy();
       hlsRef.current = null;
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [src]);
 
   // ── Video event listeners ────────────────────────────────────────────────────
@@ -221,7 +246,7 @@ export default function VideoPlayerCore({
 
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // ── Controls auto-hide ───────────────────────────────────────────────────────
@@ -526,9 +551,8 @@ export default function VideoPlayerCore({
                         <button
                           key={s}
                           onClick={() => setPlaybackRate(s)}
-                          className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm transition-colors ${
-                            speed === s ? 'text-red-400 bg-red-900/20' : 'text-gray-300 hover:bg-white/10'
-                          }`}
+                          className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm transition-colors ${speed === s ? 'text-red-400 bg-red-900/20' : 'text-gray-300 hover:bg-white/10'
+                            }`}
                         >
                           <span>{s === 1 ? 'Bình thường' : `${s}x`}</span>
                           {speed === s && <span className="text-xs">✓</span>}
@@ -552,9 +576,8 @@ export default function VideoPlayerCore({
                     <div className="p-1">
                       <button
                         onClick={() => setQuality(-1)}
-                        className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm transition-colors ${
-                          currentQuality === -1 ? 'text-red-400 bg-red-900/20' : 'text-gray-300 hover:bg-white/10'
-                        }`}
+                        className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm transition-colors ${currentQuality === -1 ? 'text-red-400 bg-red-900/20' : 'text-gray-300 hover:bg-white/10'
+                          }`}
                       >
                         <span>Tự động</span>
                         {currentQuality === -1 && <span className="text-xs">✓</span>}
@@ -563,9 +586,8 @@ export default function VideoPlayerCore({
                         <button
                           key={q.index}
                           onClick={() => setQuality(q.index)}
-                          className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm transition-colors ${
-                            currentQuality === q.index ? 'text-red-400 bg-red-900/20' : 'text-gray-300 hover:bg-white/10'
-                          }`}
+                          className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm transition-colors ${currentQuality === q.index ? 'text-red-400 bg-red-900/20' : 'text-gray-300 hover:bg-white/10'
+                            }`}
                         >
                           <span>{q.height}p</span>
                           {currentQuality === q.index && <span className="text-xs">✓</span>}

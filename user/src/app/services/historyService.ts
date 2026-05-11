@@ -4,6 +4,7 @@ export interface WatchHistoryResponse {
   id: number;
   episodeVersionId: number;
   episodeId: number;
+  movieId: number;
   movieTitle: string;
   episodeName: string;
   versionType: string; // "VIETSUB" | "THUYET_MINH" | "LONG_TIENG"

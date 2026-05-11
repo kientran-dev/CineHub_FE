@@ -8,11 +8,30 @@ export interface UserProfile {
   avatar: string;
   dateOfBirth: string;
   rewardPoints: number;
+  isPremium: boolean;
+  premiumPackageName: string | null;
+  premiumEndDate: string | null;
+}
+
+export interface UserUpdateData {
+  fullName?: string;
+  avatar?: string;
+  dateOfBirth?: string;
 }
 
 export const userService = {
   async getMe(): Promise<UserProfile> {
     const res = await api.get<UserProfile>('/users/me');
+    return res.data;
+  },
+
+  async updateProfile(data: UserUpdateData): Promise<UserProfile> {
+    const res = await api.put<UserProfile>('/users/me', data);
+    return res.data;
+  },
+
+  async claimBirthdayReward(): Promise<UserProfile> {
+    const res = await api.post<UserProfile>('/users/me/claim-birthday-reward');
     return res.data;
   },
 };

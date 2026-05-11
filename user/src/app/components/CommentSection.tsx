@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect } from 'react';
 import { ThumbsUp, ThumbsDown, Reply, ChevronDown, ChevronUp, Send, Loader2 } from 'lucide-react';
+import { toast } from 'sonner';
 import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar';
 import { Button } from './ui/button';
 import { Textarea } from './ui/textarea';
@@ -25,12 +26,12 @@ function apiToCommentItem(c: CommentResponse, movieId: string): CommentItem {
     id: String(c.id),
     userId: c.username,
     movieId,
-    userName: c.username,
+    userName: c.fullName || c.username,
     userAvatar: c.userAvatar ?? '',
     content: c.content,
     createdAt: c.createdDate,
-    likes: 0,
-    dislikes: 0,
+    likes: c.likes ?? 0,
+    dislikes: c.dislikes ?? 0,
   };
 }
 
@@ -121,7 +122,7 @@ function SingleComment({
             }`}
           >
             <ThumbsUp className={`h-3.5 w-3.5 ${isLiked ? 'fill-blue-400' : ''}`} />
-            <span>{comment.likes + (isLiked ? 1 : 0)}</span>
+            <span>{comment.likes}</span>
           </button>
 
           <button
@@ -131,7 +132,7 @@ function SingleComment({
             }`}
           >
             <ThumbsDown className={`h-3.5 w-3.5 ${isDisliked ? 'fill-red-400' : ''}`} />
-            <span>{comment.dislikes + (isDisliked ? 1 : 0)}</span>
+            <span>{comment.dislikes}</span>
           </button>
 
           {depth < 2 && (
@@ -268,7 +269,7 @@ export default function CommentSection({ movieId, initialComments }: CommentSect
 
   const handleAddComment = async () => {
     if (!newComment.trim()) return;
-    if (!isAuthenticated) { alert('Vui lòng đăng nhập để bình luận'); return; }
+    if (!isAuthenticated) { toast.info('Vui lòng đăng nhập để bình luận'); return; }
     setSubmitting(true);
     try {
       const res = await commentService.addComment({ movieId: Number(movieId), content: newComment.trim() });
@@ -277,48 +278,82 @@ export default function CommentSection({ movieId, initialComments }: CommentSect
       setNewComment('');
       setVisibleRootCount(v => v + 1);
     } catch {
-      alert('Gửi bình luận thất bại!');
+      toast.error('Gửi bình luận thất bại!');
     } finally {
       setSubmitting(false);
     }
   };
 
   const handleAddReply = useCallback(async (parentId: string, content: string) => {
-    if (!isAuthenticated) { alert('Vui lòng đăng nhập để trả lời'); return; }
+    if (!isAuthenticated) { toast.info('Vui lòng đăng nhập để trả lời'); return; }
     try {
       const res = await commentService.addComment({ movieId: Number(movieId), content, parentId: Number(parentId) });
       const r: CommentItem = { ...apiToCommentItem(res, movieId), parentId };
       setComments(prev => [...prev, r]);
     } catch {
-      alert('Gửi trả lời thất bại!');
+      toast.error('Gửi trả lời thất bại!');
     }
   }, [movieId, isAuthenticated]);
 
-  const handleLike = useCallback((id: string) => {
-    setLiked(prev => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id); else next.add(id);
-      return next;
-    });
-    setDisliked(prev => {
-      const next = new Set(prev);
-      next.delete(id);
-      return next;
-    });
-  }, []);
+  const handleLike = useCallback(async (id: string) => {
+    if (!isAuthenticated) { toast.info('Vui lòng đăng nhập để thích bình luận'); return; }
+    try {
+      await commentService.toggleReaction(Number(id), 'LIKE');
+      // Update local state
+      setComments(prev => prev.map(c => {
+        if (c.id !== id) return c;
+        const wasLiked = liked.has(id);
+        const wasDisliked = disliked.has(id);
+        return {
+          ...c,
+          likes: wasLiked ? c.likes - 1 : c.likes + 1,
+          dislikes: wasDisliked ? c.dislikes - 1 : c.dislikes,
+        };
+      }));
+      setLiked(prev => {
+        const next = new Set(prev);
+        if (next.has(id)) next.delete(id); else next.add(id);
+        return next;
+      });
+      setDisliked(prev => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
+    } catch (e) {
+      console.error('Like failed:', e);
+    }
+  }, [isAuthenticated, liked, disliked]);
 
-  const handleDislike = useCallback((id: string) => {
-    setDisliked(prev => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id); else next.add(id);
-      return next;
-    });
-    setLiked(prev => {
-      const next = new Set(prev);
-      next.delete(id);
-      return next;
-    });
-  }, []);
+  const handleDislike = useCallback(async (id: string) => {
+    if (!isAuthenticated) { toast.info('Vui lòng đăng nhập để thích bình luận'); return; }
+    try {
+      await commentService.toggleReaction(Number(id), 'DISLIKE');
+      // Update local state
+      setComments(prev => prev.map(c => {
+        if (c.id !== id) return c;
+        const wasDisliked = disliked.has(id);
+        const wasLiked = liked.has(id);
+        return {
+          ...c,
+          dislikes: wasDisliked ? c.dislikes - 1 : c.dislikes + 1,
+          likes: wasLiked ? c.likes - 1 : c.likes,
+        };
+      }));
+      setDisliked(prev => {
+        const next = new Set(prev);
+        if (next.has(id)) next.delete(id); else next.add(id);
+        return next;
+      });
+      setLiked(prev => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
+    } catch (e) {
+      console.error('Dislike failed:', e);
+    }
+  }, [isAuthenticated, liked, disliked]);
 
   return (
     <div className="space-y-6">

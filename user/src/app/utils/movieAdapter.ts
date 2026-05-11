@@ -19,6 +19,13 @@ export function toMovie(m: MovieResponse): Movie {
   const backdrop = m.thumbnail ?? m.poster ?? '';
   const poster = m.poster ?? m.thumbnail ?? '';
 
+  // Derive subtitleType from real episode version data
+  let subtitleType: 'vietsub' | 'thuyetminh' | 'longtieng' | undefined;
+  const firstVersionType = m.episodes?.[0]?.episodeVersions?.[0]?.type?.toUpperCase();
+  if (firstVersionType === 'VIETSUB') subtitleType = 'vietsub';
+  else if (firstVersionType === 'THUYET_MINH') subtitleType = 'thuyetminh';
+  else if (firstVersionType === 'LONG_TIENG') subtitleType = 'longtieng';
+
   return {
     id: String(m.id),
     title: m.title ?? '',
@@ -37,17 +44,26 @@ export function toMovie(m: MovieResponse): Movie {
     isPremium: false,
     trending: false,
     featured: false,
-    episodes: m.episodes?.map(e => ({
-      id: String(e.id),
-      episodeNumber: e.episodeNumber ?? 0,
-      title: e.episodeName ?? '',
-      duration: 0,
-      thumbnail: m.thumbnail ?? '',
-      // Lấy videoUrl của version đầu tiên nếu có
-      videoUrl: e.episodeVersions?.[0]?.videoUrl ?? '',
-      description: e.episodeName ?? '',
-      episodeVersions: e.episodeVersions,
-    })),
+    subtitleType,
+    episodes: m.episodes?.map(e => {
+      // Strip prefix like "Full|" or "1|" from URL if present
+      const rawUrl = e.episodeVersions?.[0]?.videoUrl ?? '';
+      const pipeIdx = rawUrl.indexOf('|');
+      const cleanUrl = (pipeIdx !== -1 && rawUrl.substring(pipeIdx + 1).startsWith('http'))
+        ? rawUrl.substring(pipeIdx + 1).trim()
+        : rawUrl;
+
+      return {
+        id: String(e.id),
+        episodeNumber: e.episodeNumber ?? 0,
+        title: e.episodeName ?? '',
+        duration: 0,
+        thumbnail: m.thumbnail ?? '',
+        videoUrl: cleanUrl,
+        description: e.episodeName ?? '',
+        episodeVersions: e.episodeVersions,
+      };
+    }),
     actors: m.actors?.map(a => ({
       id: String(a.id),
       name: a.fullName ?? '',

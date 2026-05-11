@@ -8,6 +8,7 @@ interface AuthContextType {
   isLoading: boolean;
   login: (data: LoginRequest) => Promise<void>;
   register: (data: RegisterRequest) => Promise<void>;
+  loginWithGoogle: (idToken: string) => Promise<void>;
   logout: () => Promise<void>;
 }
 
@@ -38,6 +39,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(res.user);
   };
 
+  const loginWithGoogle = async (idToken: string) => {
+    const res = await authService.googleLogin(idToken);
+    authService.saveTokens(res);
+    setUser(res.user);
+  };
+
   const logout = async () => {
     const refreshToken = localStorage.getItem('refreshToken');
     if (refreshToken) {
@@ -55,7 +62,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const isAdmin = user?.roles?.includes('ROLE_ADMIN') ?? false;
 
   return (
-    <AuthContext.Provider value={{ user, isAuthenticated, isAdmin, isLoading, login, register, logout }}>
+    <AuthContext.Provider value={{ user, isAuthenticated, isAdmin, isLoading, login, register, loginWithGoogle, logout }}>
       {children}
     </AuthContext.Provider>
   );

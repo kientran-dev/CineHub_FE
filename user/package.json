@@ -6,7 +6,9 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "cypress:open": "cypress open",
+    "cypress:run": "cypress run"
   },
   "dependencies": {
     "@radix-ui/react-accordion": "1.2.3",
@@ -35,6 +37,7 @@
     "@radix-ui/react-toggle": "1.1.2",
     "@radix-ui/react-toggle-group": "1.1.2",
     "@radix-ui/react-tooltip": "1.1.8",
+    "@react-oauth/google": "^0.13.5",
     "axios": "^1.14.0",
     "class-variance-authority": "0.7.1",
     "clsx": "2.1.1",
@@ -60,6 +63,7 @@
     "@types/react": "^18.3.1",
     "@types/react-dom": "^18.3.0",
     "@vitejs/plugin-react": "4.7.0",
+    "cypress": "^15.14.0",
     "tailwindcss": "4.1.12",
     "typescript": "^5.4.5",
     "vite": "6.3.5"

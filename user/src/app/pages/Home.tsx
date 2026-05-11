@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router';
-import { Play, ChevronLeft, ChevronRight, Sparkles, Loader2 } from 'lucide-react';
+import { Play, ChevronLeft, ChevronRight, Sparkles, Loader2, Brain } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import Header from '../components/Header';
 import MovieCard from '../components/MovieCard';
@@ -19,6 +19,7 @@ export default function Home() {
   const [direction, setDirection] = useState(1);
   const [movies, setMovies] = useState<Movie[]>([]);
   const [continueWatching, setContinueWatching] = useState<Array<Movie & { progress: number }>>([]);
+  const [recommendations, setRecommendations] = useState<Movie[]>([]);
   const [loading, setLoading] = useState(true);
 
   // Fetch all movies từ API
@@ -38,22 +39,52 @@ export default function Home() {
     historyService.getHistory().then(history => {
       // Lấy phim tương ứng từ danh sách movies đã fetch
       movieService.getAllMovies().then(allMovies => {
-        const mapped = history.map(wh => {
-          // Tìm movie từ title (vì API history trả về movieTitle, không có movieId trực tiếp)
-          const apiMovie = allMovies.find(m => m.title === wh.movieTitle);
-          if (!apiMovie) return null;
+        const uniqueMovies = new Map<number, Movie & { progress: number; watchDate: string }>();
+
+        history.forEach(wh => {
+          // Khớp theo movieId (vừa bổ sung vào API) hoặc fallback theo Title
+          const apiMovie = allMovies.find(m => m.id === wh.movieId || m.title === wh.movieTitle);
+          if (!apiMovie) return;
+
           const progress = wh.watchTime && apiMovie.duration
             ? Math.round((wh.watchTime / (apiMovie.duration! * 60)) * 100)
             : 0;
-          return { ...toMovie(apiMovie), progress: Math.min(progress, 100) };
-        }).filter(Boolean) as Array<Movie & { progress: number }>;
-        setContinueWatching(mapped);
+
+          const movieWithProgress = { 
+            ...toMovie(apiMovie), 
+            progress: Math.min(progress, 100),
+            watchDate: wh.watchDate 
+          };
+
+          // Nếu phim này đã có trong Map, chỉ giữ lại bản ghi có ngày xem mới nhất
+          const existing = uniqueMovies.get(apiMovie.id);
+          if (!existing || new Date(wh.watchDate) > new Date(existing.watchDate)) {
+            uniqueMovies.set(apiMovie.id, movieWithProgress);
+          }
+        });
+
+        // Chuyển Map thành mảng và sắp xếp theo ngày xem mới nhất
+        const sorted = Array.from(uniqueMovies.values())
+          .sort((a, b) => new Date(b.watchDate).getTime() - new Date(a.watchDate).getTime());
+          
+        setContinueWatching(sorted);
       });
     }).catch(() => setContinueWatching([]));
   }, [isAuthenticated]);
 
+  // Fetch recommendations từ Collaborative Filtering API
+  useEffect(() => {
+    if (!isAuthenticated) {
+      setRecommendations([]);
+      return;
+    }
+    movieService.getRecommendations()
+      .then(data => setRecommendations(toMovieList(data)))
+      .catch(() => setRecommendations([]));
+  }, [isAuthenticated]);
+
   // Phân loại phim (dựa trên country và genres từ API)
-  const featuredMovies = movies.slice(0, 5); // Lấy 5 phim đầu làm featured banner
+  const featuredMovies = movies.slice(0, 4); // Lấy 4 phim đầu làm featured banner
   const trendingMovies = movies.slice(0, 12);
   const koreanMovies = movies.filter(m => m.country === 'KR' || m.country === 'Hàn Quốc');
   const chineseMovies = movies.filter(m => m.country === 'CN' || m.country === 'Trung Quốc');
@@ -275,6 +306,29 @@ export default function Home() {
                 <ChevronRight className="h-8 w-8" />
               </button>
             </div>
+          </div>
+        </section>
+      )}
+
+      {/* Gợi ý cho bạn — Collaborative Filtering */}
+      {recommendations.length > 0 && (
+        <section className="relative py-8 overflow-hidden">
+          <div className="absolute inset-0 bg-gradient-to-b from-[#0a0a0a] via-[#0d1117] to-[#0a0a0a]" />
+          <div className="absolute top-1/2 left-1/4 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[250px] bg-cyan-600/5 rounded-full blur-3xl" />
+          <div className="absolute top-1/2 right-1/4 translate-x-1/2 -translate-y-1/2 w-[400px] h-[200px] bg-purple-600/5 rounded-full blur-3xl" />
+          <div className="container relative mx-auto px-4">
+            <div className="flex items-center mb-5 gap-3">
+              <div className="flex items-center justify-center w-9 h-9 rounded-lg bg-gradient-to-br from-cyan-500/20 to-purple-500/20 border border-cyan-500/20">
+                <Brain className="h-5 w-5 text-cyan-400" />
+              </div>
+              <h2 className="text-2xl font-bold bg-gradient-to-r from-cyan-400 to-purple-400 bg-clip-text text-transparent">
+                Gợi ý cho bạn
+              </h2>
+              <span className="text-[10px] font-medium bg-cyan-500/10 text-cyan-400 px-2 py-0.5 rounded-full border border-cyan-500/20 uppercase tracking-wider">
+                AI Recommendation
+              </span>
+            </div>
+            <ScrollRow movies={recommendations} />
           </div>
         </section>
       )}

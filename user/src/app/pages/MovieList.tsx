@@ -97,6 +97,7 @@ export default function MovieList() {
 
   const isGenreFilter = filterType === 'the-loai';
   const isCountryFilter = filterType === 'quoc-gia';
+  const isSearchFilter = filterType === 'tim-kiem';
   const decodedFilterValue = filterValue ? decodeURIComponent(filterValue) : '';
 
   const config = isGenreFilter
@@ -111,7 +112,13 @@ export default function MovieList() {
         apiType: null as string | null,
         description: `Danh sách phim của ${decodedFilterValue}.`,
       }
-      : typeConfig[type || ''] || typeConfig['phim-le'];
+      : isSearchFilter
+        ? {
+          title: `Kết quả tìm kiếm: "${decodedFilterValue}"`,
+          apiType: null as string | null,
+          description: `Hiển thị các phim liên quan đến từ khóa "${decodedFilterValue}".`,
+        }
+        : typeConfig[type || ''] || typeConfig['phim-le'];
 
   const [allMovies, setAllMovies] = useState<Movie[]>([]);
   const [loading, setLoading] = useState(true);
@@ -129,17 +136,23 @@ export default function MovieList() {
   // Reset & pre-select khi đổi route
   useEffect(() => {
     setVisibleCount(PAGE_SIZE);
-    setSearchQuery('');
     setSortBy('newest');
     setSelectedYears([]);
 
-    if (isGenreFilter && decodedFilterValue) {
+    if (isSearchFilter && decodedFilterValue) {
+      setSearchQuery(decodedFilterValue);
+      setSelectedGenres([]);
+      setSelectedCountries([]);
+    } else if (isGenreFilter && decodedFilterValue) {
+      setSearchQuery('');
       setSelectedGenres([decodedFilterValue]);
       setSelectedCountries([]);
     } else if (isCountryFilter && decodedFilterValue) {
+      setSearchQuery('');
       setSelectedCountries([decodedFilterValue]);
       setSelectedGenres([]);
     } else {
+      setSearchQuery('');
       setSelectedGenres([]);
       setSelectedCountries([]);
     }
@@ -151,7 +164,7 @@ export default function MovieList() {
     movieService.getAllMovies()
       .then(data => {
         let filtered = data;
-        if (!isGenreFilter && !isCountryFilter && (config as any).apiType) {
+        if (!isGenreFilter && !isCountryFilter && !isSearchFilter && (config as any).apiType) {
           filtered = data.filter(m => m.type?.toUpperCase() === (config as any).apiType);
         }
         setAllMovies(toMovieList(filtered));

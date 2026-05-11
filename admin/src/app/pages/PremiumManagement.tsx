@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { Crown, Plus, Edit, Trash2, Users, DollarSign, Calendar, Loader2 } from 'lucide-react';
+import { Crown, Plus, Edit, Trash2, Users, DollarSign, Calendar, Loader2, Gift } from 'lucide-react';
+import { toast } from 'sonner';
 import { premiumPackageService, type PremiumPackageResponse } from '../services/adminService';
 
 export default function PremiumManagement() {
@@ -13,6 +14,7 @@ export default function PremiumManagement() {
   const [price, setPrice] = useState(0);
   const [durationDays, setDurationDays] = useState(0);
   const [description, setDescription] = useState('');
+  const [rewardPoints, setRewardPoints] = useState(0);
   const [saving, setSaving] = useState(false);
 
   const fetchPackages = () => {
@@ -32,8 +34,9 @@ export default function PremiumManagement() {
       try {
         await premiumPackageService.deletePackage(id);
         setPackages(packages.filter((p) => p.id !== id));
+        toast.success('Xóa gói Premium thành công!');
       } catch (e) {
-        alert('Xoá thất bại');
+        toast.error('Xóa gói Premium thất bại!');
       }
     }
   };
@@ -44,6 +47,7 @@ export default function PremiumManagement() {
     setPrice(pkg.price);
     setDurationDays(pkg.durationDays);
     setDescription(pkg.description || '');
+    setRewardPoints(pkg.rewardPoints ?? 0);
     setIsModalOpen(true);
   };
 
@@ -53,6 +57,7 @@ export default function PremiumManagement() {
     setPrice(0);
     setDurationDays(30);
     setDescription('');
+    setRewardPoints(0);
     setIsModalOpen(true);
   };
 
@@ -60,7 +65,7 @@ export default function PremiumManagement() {
     e.preventDefault();
     setSaving(true);
     try {
-      const payload = { packageName, price, durationDays, description };
+      const payload = { packageName, price, durationDays, description, rewardPoints };
       if (editingPackage) {
         const updated = await premiumPackageService.updatePackage(editingPackage.id, payload);
         setPackages(packages.map(p => p.id === updated.id ? updated : p));
@@ -69,8 +74,9 @@ export default function PremiumManagement() {
         setPackages([...packages, created]);
       }
       setIsModalOpen(false);
+      toast.success(editingPackage ? 'Cập nhật gói thành công!' : 'Thêm gói mới thành công!');
     } catch (err) {
-      alert('Lưu gói thất bại!');
+      toast.error('Lưu gói thất bại!');
     } finally {
       setSaving(false);
     }
@@ -183,6 +189,12 @@ export default function PremiumManagement() {
                   <Calendar size={16} />
                   <span className="text-sm">{pkg.durationDays} ngày</span>
                 </div>
+                {(pkg.rewardPoints ?? 0) > 0 && (
+                  <div className="flex items-center gap-1 mt-1 text-yellow-200">
+                    <Gift size={14} />
+                    <span className="text-sm font-medium">Tặng {pkg.rewardPoints?.toLocaleString('vi-VN')} điểm</span>
+                  </div>
+                )}
               </div>
 
               <div className="p-6">
@@ -287,6 +299,23 @@ export default function PremiumManagement() {
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                   placeholder="Xem không giới hạn&#10;Chất lượng HD&#10;Không quảng cáo"
                 />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Điểm tích lũy tặng khi đăng kí
+                </label>
+                <div className="relative">
+                  <Gift className="absolute left-3 top-1/2 -translate-y-1/2 text-amber-500" size={16} />
+                  <input
+                    type="number"
+                    min={0}
+                    value={rewardPoints}
+                    onChange={(e) => setRewardPoints(Number(e.target.value))}
+                    className="w-full pl-9 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="Ví dụ: 100"
+                  />
+                </div>
+                <p className="text-xs text-gray-400 mt-1">1 điểm = giảm 1,000 VND cho lần mua sau</p>
               </div>
               <div className="flex gap-3 pt-4">
                 <button

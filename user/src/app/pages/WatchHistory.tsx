@@ -12,6 +12,7 @@ import type { Movie } from '../data/mockData';
 
 interface HistoryItem extends Movie {
   historyId: number;
+  movieId: number;
   watchTime: number;
   watchDate: string;
   episodeName: string;
@@ -33,7 +34,7 @@ export default function WatchHistory() {
 
       const mapped: HistoryItem[] = history
         .map((wh: WatchHistoryResponse) => {
-          const apiMovie = allMovies.find(m => m.title === wh.movieTitle);
+          const apiMovie = allMovies.find(m => m.id === wh.movieId || m.title === wh.movieTitle);
           if (!apiMovie) return null;
           const durationSec = (apiMovie.duration ?? 0) * 60;
           const progressPercent = durationSec > 0
@@ -42,6 +43,7 @@ export default function WatchHistory() {
           return {
             ...toMovie(apiMovie),
             historyId: wh.id,
+            movieId: apiMovie.id, // Lưu lại ID phim để deduplicate
             watchTime: wh.watchTime,
             watchDate: wh.watchDate,
             episodeName: wh.episodeName,
@@ -49,11 +51,20 @@ export default function WatchHistory() {
             progressPercent,
           };
         })
-        .filter(Boolean) as HistoryItem[];
+        .filter(Boolean) as any[];
 
-      // Sắp xếp mới nhất trước
-      mapped.sort((a, b) => new Date(b.watchDate).getTime() - new Date(a.watchDate).getTime());
-      setHistoryItems(mapped);
+      // Loại bỏ trùng lặp (chỉ giữ bản ghi mới nhất cho mỗi phim)
+      const uniqueMap = new Map<number, HistoryItem>();
+      mapped.forEach(item => {
+        const existing = uniqueMap.get(item.movieId);
+        if (!existing || new Date(item.watchDate) > new Date(existing.watchDate)) {
+          uniqueMap.set(item.movieId, item);
+        }
+      });
+
+      const finalItems = Array.from(uniqueMap.values());
+      finalItems.sort((a, b) => new Date(b.watchDate).getTime() - new Date(a.watchDate).getTime());
+      setHistoryItems(finalItems);
     } catch (e) {
       console.error(e);
     } finally {

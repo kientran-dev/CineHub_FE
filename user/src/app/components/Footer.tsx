@@ -1,5 +1,6 @@
 import { Link } from 'react-router';
 import { Film, Facebook, Youtube, Instagram, Twitter, Mail, Phone } from 'lucide-react';
+import { toast } from 'sonner';
 
 export default function Footer() {
   const year = new Date().getFullYear();
@@ -26,26 +27,26 @@ export default function Footer() {
             {/* Social */}
             <div className="flex gap-3 mb-6">
               {[
-                { Icon: Facebook, href: '#', label: 'Facebook' },
-                { Icon: Youtube, href: '#', label: 'YouTube' },
-                { Icon: Instagram, href: '#', label: 'Instagram' },
-                { Icon: Twitter, href: '#', label: 'Twitter' },
-              ].map(({ Icon, href, label }) => (
-                <a
+                { Icon: Facebook, label: 'Facebook' },
+                { Icon: Youtube, label: 'YouTube' },
+                { Icon: Instagram, label: 'Instagram' },
+                { Icon: Twitter, label: 'Twitter' },
+              ].map(({ Icon, label }) => (
+                <button
                   key={label}
-                  href={href}
+                  onClick={() => toast.info(`${label} sẽ được cập nhật sau`)}
                   aria-label={label}
                   className="flex items-center justify-center w-9 h-9 rounded-full bg-gray-800/60 text-gray-400 hover:bg-red-600/20 hover:text-red-500 transition-all border border-gray-700/30"
                 >
                   <Icon className="h-4 w-4" />
-                </a>
+                </button>
               ))}
             </div>
 
             {/* Contact */}
             <div className="space-y-1.5 text-sm text-gray-500">
               <p className="flex items-center gap-2"><Mail className="h-4 w-4 text-gray-600" /> support@cinehub.vn</p>
-              <p className="flex items-center gap-2"><Phone className="h-4 w-4 text-gray-600" /> 1800 1234</p>
+              <p className="flex items-center gap-2"><Phone className="h-4 w-4 text-gray-600" /> 1800 6868</p>
             </div>
           </div>
 
@@ -84,9 +85,9 @@ export default function Footer() {
                 'Câu hỏi thường gặp',
               ].map(item => (
                 <li key={item}>
-                  <a href="#" className="text-gray-500 text-sm hover:text-red-500 transition-colors">
+                  <button onClick={() => toast.info(`${item} sẽ được cập nhật sau`)} className="text-gray-500 text-sm hover:text-red-500 transition-colors">
                     {item}
-                  </a>
+                  </button>
                 </li>
               ))}
             </ul>
@@ -98,13 +99,13 @@ export default function Footer() {
           <p className="text-gray-600 text-sm">
             © {year} CineHub. All rights reserved.
           </p>
-          <div className="flex items-center gap-4 text-xs text-gray-700">
-            <a href="#" className="hover:text-gray-500 transition-colors">Điều khoản</a>
-            <span>·</span>
-            <a href="#" className="hover:text-gray-500 transition-colors">Bảo mật</a>
-            <span>·</span>
-            <a href="#" className="hover:text-gray-500 transition-colors">Cookie</a>
-          </div>
+            <div className="flex items-center gap-4 text-xs text-gray-700">
+              <button onClick={() => toast.info('Điều khoản sẽ được cập nhật sau')} className="hover:text-gray-500 transition-colors">Điều khoản</button>
+              <span>·</span>
+              <button onClick={() => toast.info('Chính sách bảo mật sẽ được cập nhật sau')} className="hover:text-gray-500 transition-colors">Bảo mật</button>
+              <span>·</span>
+              <button onClick={() => toast.info('Chính sách Cookie sẽ được cập nhật sau')} className="hover:text-gray-500 transition-colors">Cookie</button>
+            </div>
         </div>
       </div>
     </footer>

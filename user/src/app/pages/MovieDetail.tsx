@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router';
 import { Play, Heart, Star, Crown, Calendar, Clock, Globe, Sparkles, Youtube, X, Loader2 } from 'lucide-react';
+import { toast } from 'sonner';
 import Header from '../components/Header';
+import Footer from '../components/Footer';
 import MovieCard from '../components/MovieCard';
 import { Button } from '../components/ui/button';
 import { Badge } from '../components/ui/badge';
@@ -22,7 +24,7 @@ export default function MovieDetail() {
 
   const [movie, setMovie] = useState<Movie | null>(null);
   const [apiMovie, setApiMovie] = useState<MovieResponse | null>(null);
-  const [allMovies, setAllMovies] = useState<Movie[]>([]);
+  const [similarMovies, setSimilarMovies] = useState<Movie[]>([]);
   const [loading, setLoading] = useState(true);
   const [isFavorite, setIsFavorite] = useState(false);
   const [userRating, setUserRating] = useState(0);
@@ -37,11 +39,11 @@ export default function MovieDetail() {
     setLoading(true);
     Promise.all([
       movieService.getMovieById(Number(id)),
-      movieService.getAllMovies(),
-    ]).then(([detail, all]) => {
+      movieService.getSimilarMovies(Number(id)),
+    ]).then(([detail, similar]) => {
       setApiMovie(detail);
       setMovie(toMovie(detail));
-      setAllMovies(toMovieList(all.filter(m => m.id !== detail.id)).slice(0, 6));
+      setSimilarMovies(toMovieList(similar.filter(m => m.id !== detail.id)).slice(0, 6));
     }).catch(console.error)
       .finally(() => setLoading(false));
   }, [id]);
@@ -70,21 +72,28 @@ export default function MovieDetail() {
       } else {
         await favoriteService.addFavorite(Number(id));
         setIsFavorite(true);
+        toast.success('Đã thêm vào danh sách yêu thích ❤️');
       }
     } catch (e) {
       console.error(e);
+      toast.error('Có lỗi xảy ra, vui lòng thử lại');
     } finally {
       setFavoriteLoading(false);
     }
   };
 
   const handleRate = async (r: number) => {
-    if (!isAuthenticated) { navigate('/auth'); return; }
+    if (!isAuthenticated) { navigate('/auth', { state: { from: `/movie/${id}` } }); return; }
     if (!id) return;
-    const score = r === userRating ? 0 : r;
-    setUserRating(score);
+    const isUnrating = r === userRating;
+    setUserRating(isUnrating ? 0 : r);
     try {
-      await ratingService.rateMovie(Number(id), score * 2); // chuyển 1-5 sao → 1-10 scale
+      if (isUnrating) {
+        await ratingService.deleteRating(Number(id));
+      } else {
+        await ratingService.rateMovie(Number(id), r * 2);
+        toast.success(`Đã đánh giá ${r} sao ⭐`);
+      }
     } catch (e) {
       console.error(e);
     }
@@ -245,7 +254,13 @@ export default function MovieDetail() {
                 <Button
                   size="lg"
                   className="gap-2 bg-red-600 hover:bg-red-700"
-                  onClick={() => navigate(`/watch/${movie.id}`)}
+                  onClick={() => {
+                    if (!isAuthenticated) {
+                      navigate('/auth', { state: { from: `/watch/${movie.id}` } });
+                    } else {
+                      navigate(`/watch/${movie.id}`);
+                    }
+                  }}
                 >
                   <Play className="h-5 w-5" />
                   Xem ngay
@@ -289,6 +304,7 @@ export default function MovieDetail() {
                   )}
                 </div>
 
+                {apiMovie.trailerUrl && (
                 <Button
                   size="lg"
                   variant="outline"
@@ -298,6 +314,7 @@ export default function MovieDetail() {
                   <Youtube className="h-5 w-5 text-red-500" />
                   Xem Trailer
                 </Button>
+                )}
               </div>
             </div>
           </div>
@@ -360,7 +377,13 @@ export default function MovieDetail() {
                     <button
                       key={ep.id}
                       className="aspect-square flex items-center justify-center rounded-lg bg-gray-800 hover:bg-red-600 transition-colors border border-gray-700 hover:border-red-600"
-                      onClick={() => navigate(`/watch/${movie.id}?episode=${ep.id}`)}
+                      onClick={() => {
+                        if (!isAuthenticated) {
+                          navigate('/auth', { state: { from: `/watch/${movie.id}?episode=${ep.id}` } });
+                        } else {
+                          navigate(`/watch/${movie.id}?episode=${ep.id}`);
+                        }
+                      }}
                     >
                       <span className="text-lg font-semibold">{ep.episodeNumber}</span>
                     </button>
@@ -378,8 +401,8 @@ export default function MovieDetail() {
             </TabsContent>
           </Tabs>
 
-          {/* Phim tương tự */}
-          {allMovies.length > 0 && (
+          {/* Phim tương tự — Collaborative Filtering */}
+          {similarMovies.length > 0 && (
             <div className="mt-12">
               <div className="flex items-center gap-2 mb-6">
                 <Sparkles className="h-5 w-5 text-yellow-400" />
@@ -389,11 +412,13 @@ export default function MovieDetail() {
                 </span>
               </div>
               <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
-                {allMovies.map(m => <MovieCard key={m.id} movie={m} />)}
+                {similarMovies.map(m => <MovieCard key={m.id} movie={m} />)}
               </div>
             </div>
           )}
         </div>
+
+        <Footer />
       </div>
 
       {/* YouTube Trailer Modal */}
@@ -414,7 +439,17 @@ export default function MovieDetail() {
             onClick={e => e.stopPropagation()}
           >
             <iframe
-              src="https://www.youtube.com/embed/IoHWPAN6FPg?autoplay=1&rel=0"
+              src={(() => {
+                const url = apiMovie.trailerUrl || '';
+                // Convert youtube.com/watch?v=ID or youtu.be/ID to embed format
+                let videoId = '';
+                const watchMatch = url.match(/[?&]v=([^&]+)/);
+                const shortMatch = url.match(/youtu\.be\/([^?&]+)/);
+                if (watchMatch) videoId = watchMatch[1];
+                else if (shortMatch) videoId = shortMatch[1];
+                else if (url.includes('/embed/')) return url + (url.includes('?') ? '&autoplay=1' : '?autoplay=1');
+                return videoId ? `https://www.youtube.com/embed/${videoId}?autoplay=1&rel=0` : url;
+              })()}
               title={movie.title ? `${movie.title} - Trailer` : 'Trailer'}
               allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
               allowFullScreen

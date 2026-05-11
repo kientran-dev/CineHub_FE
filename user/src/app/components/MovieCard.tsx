@@ -10,18 +10,11 @@ interface MovieCardProps {
 }
 
 export default function MovieCard({ movie }: MovieCardProps) {
-  const getSubtitleBadge = () => {
-    const id = parseInt(movie.id);
-    if (id % 3 === 0) return { type: 'Lồng tiếng', color: 'bg-gray-600/90' };
-    if (id % 3 === 1) return { type: 'Vietsub', color: 'bg-gray-600/90' };
-    return { type: 'Thuyết minh', color: 'bg-gray-600/90' };
-  };
-
-  const subtitle = movie.subtitleType 
+  const subtitle = movie.subtitleType
     ? movie.subtitleType === 'vietsub' ? { type: 'Vietsub', color: 'bg-gray-600/90' }
       : movie.subtitleType === 'longtieng' ? { type: 'Lồng tiếng', color: 'bg-gray-600/90' }
       : { type: 'Thuyết minh', color: 'bg-gray-600/90' }
-    : getSubtitleBadge();
+    : null;
 
   return (
     <Card className="group relative overflow-hidden border-gray-800/60 bg-gray-900/50 backdrop-blur-sm transition-all duration-300 hover:scale-105 hover:border-red-600/60 hover:shadow-xl hover:shadow-red-600/10">
@@ -45,11 +38,13 @@ export default function MovieCard({ movie }: MovieCardProps) {
           </div>
 
           {/* Subtitle Badge */}
-          <div className="absolute top-2 left-2">
-            <Badge className={`${subtitle.color} text-white backdrop-blur-sm text-[10px] px-1.5 py-0.5`}>
-              {subtitle.type}
-            </Badge>
-          </div>
+          {subtitle && (
+            <div className="absolute top-2 left-2">
+              <Badge className={`${subtitle.color} text-white backdrop-blur-sm text-[10px] px-1.5 py-0.5`}>
+                {subtitle.type}
+              </Badge>
+            </div>
+          )}
 
           {/* IMDb Rating */}
           {movie.imdbRating && (
@@ -68,7 +63,7 @@ export default function MovieCard({ movie }: MovieCardProps) {
           <div className="mt-1.5 flex items-center gap-2 text-xs text-gray-500">
             <span>{movie.year}</span>
             <span className="w-1 h-1 rounded-full bg-gray-600" />
-            <span>{movie.type === 'movie' ? 'Phim lẻ' : 'Phim bộ'}</span>
+            <span>{movie.type === 'movie' ? 'Phim lẻ' : movie.type === 'tv_show' ? 'TV Show' : 'Phim bộ'}</span>
           </div>
         </CardContent>
       </Link>

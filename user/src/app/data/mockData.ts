@@ -27,6 +27,7 @@ export interface Episode {
   thumbnail: string;
   videoUrl: string;
   description: string;
+  episodeVersions?: { id: number; episodeId: number; videoUrl: string; type: string }[];
 }
 
 export interface Actor {

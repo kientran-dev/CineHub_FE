@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { Search, Plus, Edit, Trash2, Film, Loader2 } from 'lucide-react';
+import { toast } from 'sonner';
 import { genreService, type GenreResponse } from '../services/adminService';
 
 export default function GenresManagement() {
@@ -30,8 +31,9 @@ export default function GenresManagement() {
     try {
       await genreService.deleteGenre(id);
       setGenres(prev => prev.filter(g => g.id !== id));
+      toast.success('Xóa thể loại thành công!');
     } catch {
-      alert('Xóa thất bại!');
+      toast.error('Xóa thể loại thất bại!');
     }
   };
 
@@ -65,8 +67,9 @@ export default function GenresManagement() {
         setGenres(prev => [...prev, created]);
       }
       setIsModalOpen(false);
+      toast.success(editingGenre ? 'Cập nhật thể loại thành công!' : 'Thêm thể loại mới thành công!');
     } catch {
-      alert('Lưu thất bại!');
+      toast.error('Lưu thể loại thất bại!');
     } finally {
       setSaving(false);
     }

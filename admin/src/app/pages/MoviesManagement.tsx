@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { Search, Plus, Edit, Trash2, Loader2 } from 'lucide-react';
+import { Search, Plus, Edit, Trash2, Loader2, X } from 'lucide-react';
+import { toast } from 'sonner';
 import { movieService, genreService, type MovieResponse, type MovieRequest, type GenreResponse } from '../services/adminService';
 import EpisodeManager from '../components/EpisodeManager';
 
@@ -44,8 +45,9 @@ export default function MoviesManagement() {
     try {
       await movieService.deleteMovie(id);
       setMovies(prev => prev.filter(m => m.id !== id));
+      toast.success('Xóa phim thành công!');
     } catch (e) {
-      alert('Xóa thất bại!');
+      toast.error('Xóa phim thất bại!');
     }
   };
 
@@ -59,10 +61,12 @@ export default function MoviesManagement() {
       poster: movie.poster,
       director: movie.director,
       releaseYear: movie.releaseYear,
+      duration: movie.duration,
       country: movie.country,
       status: movie.status,
       type: movie.type,
       imdbScore: movie.imdbScore,
+      trailerUrl: movie.trailerUrl,
       genreIds: movie.genres?.map(g => g.id) || [],
     });
     setIsModalOpen(true);
@@ -99,8 +103,9 @@ export default function MoviesManagement() {
         setMovies(prev => [...prev, created]);
       }
       setIsModalOpen(false);
+      toast.success(editingMovie ? 'Cập nhật phim thành công!' : 'Thêm phim mới thành công!');
     } catch (e) {
-      alert('Lưu thất bại!');
+      toast.error('Lưu phim thất bại!');
     } finally {
       setSaving(false);
     }
@@ -208,7 +213,17 @@ export default function MoviesManagement() {
                         {movie.type === 'SERIES' ? 'Phim bộ' : movie.type === 'TV_SHOW' ? 'TV Show' : 'Phim lẻ'}
                       </span>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{movie.status}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm">
+                      {(() => {
+                        const statusMap: Record<string, { label: string; color: string }> = {
+                          RELEASED: { label: 'Đã phát hành', color: 'bg-green-100 text-green-700' },
+                          ONGOING:  { label: 'Đang chiếu',   color: 'bg-blue-100 text-blue-700' },
+                          UPCOMING: { label: 'Sắp chiếu',    color: 'bg-yellow-100 text-yellow-700' },
+                        };
+                        const s = statusMap[movie.status] ?? { label: movie.status, color: 'bg-gray-100 text-gray-700' };
+                        return <span className={`px-2 py-1 rounded-full text-xs font-medium ${s.color}`}>{s.label}</span>;
+                      })()}
+                    </td>
                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm">
                       <div className="flex items-center justify-end gap-2">
                         <button onClick={() => handleEdit(movie)} className="text-green-600 hover:text-green-800 p-1">
@@ -234,8 +249,14 @@ export default function MoviesManagement() {
       {/* Modal Thêm/Sửa */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-lg max-w-lg w-full p-6 max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between mb-4 border-b pb-2">
+          <div className="bg-white rounded-lg max-w-4xl w-full p-6 max-h-[90vh] overflow-y-auto relative">
+            <button 
+              onClick={() => setIsModalOpen(false)}
+              className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 transition-colors"
+            >
+              <X size={24} />
+            </button>
+            <div className="flex items-center justify-between mb-4 border-b pb-2 pr-8">
               <h2 className="text-xl font-semibold">
                 {editingMovie ? 'Chỉnh sửa phim' : 'Thêm phim mới'}
               </h2>
@@ -269,6 +290,12 @@ export default function MoviesManagement() {
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">URL Poster</label>
                 <input value={form.poster || ''} onChange={e => setForm(p => ({...p, poster: e.target.value}))}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">URL Trailer (YouTube)</label>
+                <input value={form.trailerUrl || ''} onChange={e => setForm(p => ({...p, trailerUrl: e.target.value}))}
+                  placeholder="https://www.youtube.com/watch?v=..."
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
               </div>
               <div className="grid grid-cols-2 gap-4">
@@ -319,10 +346,18 @@ export default function MoviesManagement() {
                   </select>
                 </div>
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">IMDb Score</label>
-                <input type="number" step="0.1" min="0" max="10" value={form.imdbScore || ''} onChange={e => setForm(p => ({...p, imdbScore: parseFloat(e.target.value)}))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Thời lượng (phút)</label>
+                  <input type="number" min="1" value={form.duration || ''} onChange={e => setForm(p => ({...p, duration: Number(e.target.value)}))}
+                    placeholder="Ví dụ: 120"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">IMDb Score</label>
+                  <input type="number" step="0.1" min="0" max="10" value={form.imdbScore || ''} onChange={e => setForm(p => ({...p, imdbScore: parseFloat(e.target.value)}))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                </div>
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Thể loại phim</label>

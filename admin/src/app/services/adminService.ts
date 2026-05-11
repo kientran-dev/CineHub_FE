@@ -19,6 +19,7 @@ export interface MovieResponse {
   status?: string;
   type?: string;
   imdbScore?: number;
+  trailerUrl?: string;
   averageRating?: number;
   totalRatings?: number;
   genres?: GenreResponse[];
@@ -33,10 +34,12 @@ export interface MovieRequest {
   poster?: string;
   director?: string;
   releaseYear?: number;
+  duration?: number;
   country?: string;
   status?: string;
   type?: string;
   imdbScore?: number;
+  trailerUrl?: string;
   genreIds?: number[];
 }
 
@@ -87,6 +90,7 @@ export interface UserResponse {
   fullName: string;
   avatar: string;
   rewardPoints: number;
+  dateOfBirth?: string;
   roles?: string[];
   isPremium?: boolean;
   registeredDate?: string;
@@ -99,6 +103,12 @@ export const userService = {
   },
   async deleteUser(id: number): Promise<void> {
     await api.delete(`/users/${id}`);
+  },
+  async grantAdmin(id: number): Promise<void> {
+    await api.post(`/users/${id}/grant-admin`);
+  },
+  async revokeAdmin(id: number): Promise<void> {
+    await api.post(`/users/${id}/revoke-admin`);
   },
 };
 
@@ -148,6 +158,7 @@ export interface PremiumPackageResponse {
   price: number;
   durationDays: number;
   description: string;
+  rewardPoints?: number;
   activeUsers: number;
   totalRevenue: number;
 }
@@ -157,6 +168,7 @@ export interface PremiumPackageRequest {
   price: number;
   durationDays: number;
   description: string;
+  rewardPoints?: number;
 }
 
 export const premiumPackageService = {
@@ -237,6 +249,10 @@ export interface PaymentResponse {
 export const paymentService = {
   async getAllPayments(): Promise<PaymentResponse[]> {
     const res = await api.get<PaymentResponse[]>('/payments');
+    return res.data;
+  },
+  async updatePaymentStatus(id: number, status: string): Promise<PaymentResponse> {
+    const res = await api.patch<PaymentResponse>(`/payments/${id}/status`, null, { params: { status } });
     return res.data;
   }
 };
