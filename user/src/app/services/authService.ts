@@ -18,6 +18,7 @@ export interface AuthUser {
   fullName: string;
   email: string;
   roles: string[];
+  avatar?: string;
 }
 
 export interface AuthResponse {

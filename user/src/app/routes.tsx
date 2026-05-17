@@ -1,4 +1,4 @@
-import { createBrowserRouter } from "react-router";
+import { createBrowserRouter, Outlet, ScrollRestoration } from "react-router";
 import Home from "./pages/Home";
 import MovieDetail from "./pages/MovieDetail";
 import VideoPlayer from "./pages/VideoPlayer";
@@ -12,9 +12,17 @@ import MovieList from "./pages/MovieList";
 import NotFound from "./pages/NotFound";
 import ErrorBoundary from "./components/ErrorBoundary";
 
+const RootLayout = () => (
+  <>
+    <ScrollRestoration />
+    <Outlet />
+  </>
+);
+
 export const router = createBrowserRouter([
   {
     path: "/",
+    element: <RootLayout />,
     errorElement: <ErrorBoundary />,
     children: [
       { index: true, Component: Home },

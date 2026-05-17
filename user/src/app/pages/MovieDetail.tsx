@@ -181,7 +181,15 @@ export default function MovieDetail() {
                         Nội dung Premium
                       </div>
                     )}
-                    <Badge className="bg-gray-700 text-white">Vietsub</Badge>
+                    {movie.subtitleType === 'vietsub' && (
+                      <Badge className="bg-gray-700 text-white">Vietsub</Badge>
+                    )}
+                    {movie.subtitleType === 'thuyetminh' && (
+                      <Badge className="bg-gray-700 text-white">Thuyết minh</Badge>
+                    )}
+                    {movie.subtitleType === 'longtieng' && (
+                      <Badge className="bg-gray-700 text-white">Lồng tiếng</Badge>
+                    )}
                   </div>
                 </div>
 

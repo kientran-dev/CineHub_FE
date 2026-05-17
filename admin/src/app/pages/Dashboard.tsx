@@ -24,7 +24,7 @@ import {
   Legend,
   ResponsiveContainer,
 } from 'recharts';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { toast } from 'sonner';
 import { 
   dashboardService, 
@@ -108,11 +108,14 @@ export default function Dashboard() {
     revenueByMonth: [],
     genreDistribution: [],
     viewsByDay: [],
-    userGrowthByMonth: []
+    userGrowthByMonth: [],
+    statsByDay: []
   });
 
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState<string | null>(null);
+  const [revenuePeriod, setRevenuePeriod] = useState<'week' | 'month' | 'year'>('month');
+  const [growthPeriod, setGrowthPeriod] = useState<'week' | 'month' | 'year'>('month');
 
   useEffect(() => {
     Promise.all([
@@ -124,6 +127,61 @@ export default function Dashboard() {
     }).catch(console.error)
     .finally(() => setLoading(false));
   }, []);
+
+  // ── Filtered chart data ──────────────────────────────────────────────────
+  const transformByPeriod = (data: typeof chartData.revenueByMonth, period: 'week' | 'month' | 'year', valueKey: 'revenue' | 'users') => {
+    if (data.length === 0) return [];
+    const now = new Date();
+    const currentMonth = now.getMonth() + 1;
+    const currentYear = now.getFullYear();
+
+    if (period === 'year') {
+      // Gộp theo năm
+      const yearMap = new Map<string, number>();
+      data.forEach(item => {
+        const match = item.month.match(/T\d+\/(\d+)/);
+        if (!match) return;
+        const year = match[1];
+        const val = (item as unknown as Record<string, unknown>)[valueKey] as number || 0;
+        yearMap.set(year, (yearMap.get(year) || 0) + val);
+      });
+      return Array.from(yearMap.entries()).map(([year, total]) => ({ month: year, [valueKey]: total }));
+    }
+
+    if (period === 'week') {
+      // Tháng hiện tại
+      return data.filter(item => {
+        const match = item.month.match(/T(\d+)\/(\d+)/);
+        if (!match) return false;
+        return parseInt(match[1]) === currentMonth && parseInt(match[2]) === currentYear;
+      });
+    }
+
+    // 'month' = 3 tháng gần nhất
+    return data.filter(item => {
+      const match = item.month.match(/T(\d+)\/(\d+)/);
+      if (!match) return false;
+      const monthsDiff = (currentYear - parseInt(match[2])) * 12 + (currentMonth - parseInt(match[1]));
+      return monthsDiff >= 0 && monthsDiff < 3;
+    });
+  };
+
+  const filteredRevenue = useMemo(() => {
+    if (revenuePeriod === 'week') {
+      return chartData.statsByDay.map(d => ({ month: d.day, revenue: d.revenue, users: d.users }));
+    }
+    return transformByPeriod(chartData.revenueByMonth, revenuePeriod, 'revenue');
+  }, [chartData.revenueByMonth, chartData.statsByDay, revenuePeriod]);
+
+  const filteredUserGrowth = useMemo(() => {
+    if (growthPeriod === 'week') {
+      return chartData.statsByDay.map(d => ({ month: d.day, users: d.users, revenue: d.revenue }));
+    }
+    return transformByPeriod(chartData.userGrowthByMonth, growthPeriod, 'users');
+  }, [chartData.userGrowthByMonth, chartData.statsByDay, growthPeriod]);
+
+  const periodLabel = (p: 'week' | 'month' | 'year') =>
+    p === 'week' ? 'tuần' : p === 'month' ? 'tháng' : 'năm';
 
   // ── Print PDF Report ───────────────────────────────────────────────────────
   const handlePrintReport = () => {
@@ -578,12 +636,22 @@ export default function Dashboard() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Revenue Chart */}
         <div className="bg-white rounded-lg shadow p-6">
-          <h3 className="text-lg font-semibold text-gray-800 mb-4">
-            Doanh thu theo tháng ({new Date().getFullYear()})
-          </h3>
-          {chartData.revenueByMonth.length > 0 ? (
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-semibold text-gray-800">
+              Doanh thu theo {periodLabel(revenuePeriod)}
+            </h3>
+            <div className="flex rounded-lg border border-gray-200 overflow-hidden text-xs">
+              {(['week', 'month', 'year'] as const).map(p => (
+                <button key={p} onClick={() => setRevenuePeriod(p)}
+                  className={`px-3 py-1.5 transition-colors ${revenuePeriod === p ? 'bg-blue-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'}`}>
+                  {p === 'week' ? 'Tuần' : p === 'month' ? 'Tháng' : 'Năm'}
+                </button>
+              ))}
+            </div>
+          </div>
+          {filteredRevenue.length > 0 ? (
             <ResponsiveContainer width="100%" height={300}>
-              <AreaChart data={chartData.revenueByMonth}>
+              <AreaChart data={filteredRevenue}>
                 <defs>
                   <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.8} />
@@ -663,9 +731,11 @@ export default function Dashboard() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Views Chart */}
         <div className="bg-white rounded-lg shadow p-6">
-          <h3 className="text-lg font-semibold text-gray-800 mb-4">
-            Lượt xem 7 ngày gần nhất
-          </h3>
+          <div className="mb-4">
+            <h3 className="text-lg font-semibold text-gray-800">
+              Lượt xem 7 ngày gần nhất
+            </h3>
+          </div>
           {chartData.viewsByDay.length > 0 ? (
             <ResponsiveContainer width="100%" height={300}>
               <BarChart data={chartData.viewsByDay}>
@@ -689,12 +759,22 @@ export default function Dashboard() {
 
         {/* User Growth */}
         <div className="bg-white rounded-lg shadow p-6">
-          <h3 className="text-lg font-semibold text-gray-800 mb-4">
-            Tăng trưởng người dùng ({new Date().getFullYear()})
-          </h3>
-          {chartData.userGrowthByMonth.length > 0 ? (
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-semibold text-gray-800">
+              Tăng trưởng người dùng theo {periodLabel(growthPeriod)}
+            </h3>
+            <div className="flex rounded-lg border border-gray-200 overflow-hidden text-xs">
+              {(['week', 'month', 'year'] as const).map(p => (
+                <button key={p} onClick={() => setGrowthPeriod(p)}
+                  className={`px-3 py-1.5 transition-colors ${growthPeriod === p ? 'bg-green-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'}`}>
+                  {p === 'week' ? 'Tuần' : p === 'month' ? 'Tháng' : 'Năm'}
+                </button>
+              ))}
+            </div>
+          </div>
+          {filteredUserGrowth.length > 0 ? (
             <ResponsiveContainer width="100%" height={300}>
-              <LineChart data={chartData.userGrowthByMonth}>
+              <LineChart data={filteredUserGrowth}>
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="month" />
                 <YAxis />

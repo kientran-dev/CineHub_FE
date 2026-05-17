@@ -6,6 +6,7 @@ import { Button } from './ui/button';
 import { Textarea } from './ui/textarea';
 import { useAuth } from '../contexts/AuthContext';
 import { commentService, type CommentResponse } from '../services/commentService';
+import { userService } from '../services/userService';
 
 export interface CommentItem {
   id: string;
@@ -72,6 +73,8 @@ function SingleComment({
   onLike,
   onDislike,
 }: SingleCommentProps) {
+  const { user } = useAuth();
+  const displayName = user?.fullName || user?.username || 'Khách';
   const [replyOpen, setReplyOpen] = useState(false);
   const [replyText, setReplyText] = useState('');
   const [repliesExpanded, setRepliesExpanded] = useState(true);
@@ -169,7 +172,8 @@ function SingleComment({
         {replyOpen && (
           <div className="flex gap-2 mt-3 ml-1">
             <Avatar className="h-7 w-7 flex-shrink-0">
-              <AvatarFallback className="bg-red-700 text-white text-xs">U</AvatarFallback>
+              <AvatarImage src={user?.avatar ?? ''} />
+              <AvatarFallback className="bg-red-700 text-white text-xs">{displayName.charAt(0)}</AvatarFallback>
             </Avatar>
             <div className="flex-1 relative">
               <Textarea
@@ -235,6 +239,7 @@ interface CommentSectionProps {
 export default function CommentSection({ movieId, initialComments }: CommentSectionProps) {
   const { user, isAuthenticated } = useAuth();
   const displayName = user?.fullName || user?.username || 'Khách';
+  const [userAvatar, setUserAvatar] = useState<string>('');
   const [comments, setComments] = useState<CommentItem[]>(initialComments);
   const [newComment, setNewComment] = useState('');
   const [visibleRootCount, setVisibleRootCount] = useState(INITIAL_ROOT_COUNT);
@@ -242,6 +247,14 @@ export default function CommentSection({ movieId, initialComments }: CommentSect
   const [disliked, setDisliked] = useState<Set<string>>(new Set());
   const [loadingComments, setLoadingComments] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+
+  // Fetch avatar từ API (không phụ thuộc vào AuthContext)
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    userService.getMe()
+      .then(profile => setUserAvatar(profile.avatar ?? ''))
+      .catch(() => {});
+  }, [isAuthenticated]);
 
   // Fetch comments từ API khi mount
   useEffect(() => {
@@ -361,6 +374,7 @@ export default function CommentSection({ movieId, initialComments }: CommentSect
       <div className="bg-gray-900/60 rounded-2xl border border-gray-700/50 p-5 space-y-4">
         <div className="flex items-center gap-3">
           <Avatar className="h-10 w-10 flex-shrink-0">
+            <AvatarImage src={userAvatar} />
             <AvatarFallback className="bg-red-700 text-white">{displayName.charAt(0)}</AvatarFallback>
           </Avatar>
           <div>

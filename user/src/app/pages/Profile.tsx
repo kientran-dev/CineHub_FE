@@ -10,7 +10,7 @@ import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { Avatar, AvatarFallback, AvatarImage } from '../components/ui/avatar';
 import { Badge } from '../components/ui/badge';
-import { userService, type UserProfile } from '../services/userService';
+import { userService, type UserProfile, type PaymentHistory } from '../services/userService';
 import { useAuth } from '../contexts/AuthContext';
 
 export default function Profile() {
@@ -27,6 +27,7 @@ export default function Profile() {
   const [claimingBirthday, setClaimingBirthday] = useState(false);
   const [birthdayClaimed, setBirthdayClaimed] = useState(false);
   const [showAvatarPicker, setShowAvatarPicker] = useState(false);
+  const [paymentHistory, setPaymentHistory] = useState<PaymentHistory[]>([]);
 
   // === THAY URL CLOUDINARY CUA BAN VAO DAY ===
   const PRESET_AVATARS = [
@@ -48,7 +49,10 @@ export default function Profile() {
     const paymentStatus = searchParams.get('payment');
     if (paymentStatus === 'success') {
       setTimeout(() => {
-        toast.success('🎉 Thanh toán thành công! Gói Premium của bạn đã được kích hoạt.');
+        toast.success('Thanh toán thành công!', {
+          description: '🎉 Gói Premium của bạn đã được kích hoạt. Tận hưởng trải nghiệm không giới hạn!',
+          duration: 6000,
+        });
       }, 100);
       searchParams.delete('payment');
       setSearchParams(searchParams, { replace: true });
@@ -72,6 +76,9 @@ export default function Profile() {
       })
       .catch(console.error)
       .finally(() => setLoading(false));
+    userService.getMyPayments()
+      .then(setPaymentHistory)
+      .catch(console.error);
   }, [isAuthenticated]);
 
 
@@ -150,6 +157,10 @@ export default function Profile() {
           const isBirthday = today.getMonth() === dob.getMonth() && today.getDate() === dob.getDate();
           if (!isBirthday) return null;
 
+          const alreadyClaimed =
+            birthdayClaimed ||
+            (profile.lastBirthdayRewardYear === today.getFullYear());
+
           return (
             <div className="mb-8 relative overflow-hidden rounded-2xl border border-yellow-500/30 bg-gradient-to-r from-yellow-950/40 via-amber-900/30 to-orange-950/40 p-6">
               {/* Decorative elements */}
@@ -169,10 +180,10 @@ export default function Profile() {
                   CineHub chúc bạn một ngày sinh nhật thật vui vẻ và tràn đầy niềm vui! 🌟
                 </p>
 
-                {birthdayClaimed ? (
+                {alreadyClaimed ? (
                   <div className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-green-600/20 border border-green-500/30 text-green-400 text-sm font-medium">
                     <Gift className="h-4 w-4" />
-                    Đã nhận 20 điểm tích lũy! Cảm ơn bạn ❤️
+                    Bạn đã nhận 20 điểm tích lũy sinh nhật năm nay rồi! ❤️
                   </div>
                 ) : (
                   <Button
@@ -351,12 +362,10 @@ export default function Profile() {
                 <div className="flex items-center gap-2">
                   <Crown className={`h-5 w-5 ${profile?.isPremium ? 'text-yellow-500' : 'text-gray-400'}`} />
                   <div className="flex-1">
-                    <p className="font-medium text-sm">Gói đăng ký</p>
+                    <p className="font-medium text-sm">Trạng thái Premium</p>
                     {profile?.isPremium ? (
                       <div>
-                        <p className="text-sm text-yellow-400 font-semibold">
-                          {profile.premiumPackageName || 'Premium'}
-                        </p>
+                        <p className="text-sm text-yellow-400 font-semibold">Đang hoạt động</p>
                         {profile.premiumEndDate && (
                           <p className="text-xs text-gray-400 mt-0.5">
                             Có hiệu lực đến: {new Date(profile.premiumEndDate).toLocaleDateString('vi-VN', {
@@ -399,6 +408,36 @@ export default function Profile() {
                   Hủy
                 </Button>
               </div>
+
+              {/* Payment History */}
+              {paymentHistory.length > 0 && (
+                <div className="pt-4 border-t border-gray-700 mt-2">
+                  <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
+                    <Crown className="h-4 w-4 text-yellow-500" />
+                    Lịch sử gói đã mua
+                  </h3>
+                  <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
+                    {paymentHistory.slice(0, 10).map(p => (
+                      <div key={p.paymentId} className="p-3 rounded-lg border text-sm bg-gray-800/50 border-gray-700">
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="font-medium text-sm">{p.packageName || 'Premium'}</span>
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-green-900/50 text-green-400 border border-green-700/50">
+                            Thành công
+                          </span>
+                        </div>
+                        {p.amount != null && (
+                          <p className="text-yellow-400 font-semibold text-xs mb-1">
+                            {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(p.amount)}
+                          </p>
+                        )}
+                        <div className="text-xs text-gray-400">
+                          <span>Ngày mua: {new Date(p.paymentDate).toLocaleDateString('vi-VN')}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>

@@ -1,8 +1,7 @@
 import { useState, useEffect } from 'react';
-import { Clock, Trash2, Loader2 } from 'lucide-react';
+import { Clock, Trash2, Loader2, Play } from 'lucide-react';
 import Header from '../components/Header';
 import Footer from '../components/Footer';
-import MovieCard from '../components/MovieCard';
 import { historyService, type WatchHistoryResponse } from '../services/historyService';
 import { movieService } from '../services/movieService';
 import { toMovie } from '../utils/movieAdapter';
@@ -13,6 +12,7 @@ import type { Movie } from '../data/mockData';
 interface HistoryItem extends Movie {
   historyId: number;
   movieId: number;
+  episodeId: number;
   watchTime: number;
   watchDate: string;
   episodeName: string;
@@ -43,7 +43,8 @@ export default function WatchHistory() {
           return {
             ...toMovie(apiMovie),
             historyId: wh.id,
-            movieId: apiMovie.id, // Lưu lại ID phim để deduplicate
+            movieId: apiMovie.id,
+            episodeId: wh.episodeId,
             watchTime: wh.watchTime,
             watchDate: wh.watchDate,
             episodeName: wh.episodeName,
@@ -83,6 +84,15 @@ export default function WatchHistory() {
     }
   };
 
+  /** Navigate trực tiếp đến đúng tập đã xem gần nhất */
+  const handleContinueWatch = (item: HistoryItem) => {
+    if (item.episodeId) {
+      navigate(`/watch/${item.movieId}?episode=${item.episodeId}`);
+    } else {
+      navigate(`/watch/${item.movieId}`);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-[#0a0a0a] text-white">
       <Header />
@@ -118,10 +128,41 @@ export default function WatchHistory() {
             {historyItems.map((movie) => (
               <div key={movie.historyId} className="flex flex-col group/item">
                 <div className="relative">
-                  <MovieCard movie={movie} />
+                  {/* Card với click navigate trực tiếp đến đúng tập */}
+                  <div
+                    onClick={() => handleContinueWatch(movie)}
+                    className="cursor-pointer group relative overflow-hidden rounded-lg border border-gray-800/60 bg-gray-900/50 backdrop-blur-sm transition-all duration-300 hover:scale-105 hover:border-red-600/60 hover:shadow-xl hover:shadow-red-600/10"
+                  >
+                    <div className="relative aspect-[2/3] overflow-hidden">
+                      <img
+                        src={movie.poster}
+                        alt={movie.title}
+                        className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-110"
+                      />
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent" />
+                      <div className="absolute inset-0 bg-black/60 opacity-0 transition-opacity duration-300 group-hover:opacity-100 flex items-center justify-center">
+                        <div className="flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg shadow-lg shadow-red-600/30">
+                          <Play className="h-5 w-5" />
+                          <span className="font-medium">Xem tiếp</span>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="p-3">
+                      <h3 className="line-clamp-1 font-bold text-sm">{movie.title}</h3>
+                      {movie.englishTitle && (
+                        <p className="line-clamp-1 text-xs text-gray-500 mt-0.5">{movie.englishTitle}</p>
+                      )}
+                      <div className="mt-1.5 flex items-center gap-2 text-xs text-gray-500">
+                        <span>{movie.year}</span>
+                        <span className="w-1 h-1 rounded-full bg-gray-600" />
+                        <span>{movie.type === 'movie' ? 'Phim lẻ' : movie.type === 'tv_show' ? 'TV Show' : 'Phim bộ'}</span>
+                      </div>
+                    </div>
+                  </div>
+
                   <button
-                    onClick={() => handleDelete(movie.historyId)}
-                    className="absolute top-2 right-2 p-1.5 rounded-full bg-black/60 opacity-0 group-hover/item:opacity-100 transition-opacity hover:bg-red-600/80"
+                    onClick={(e) => { e.stopPropagation(); handleDelete(movie.historyId); }}
+                    className="absolute top-2 right-2 p-1.5 rounded-full bg-black/60 opacity-0 group-hover/item:opacity-100 transition-opacity hover:bg-red-600/80 z-10"
                     title="Xóa khỏi lịch sử"
                   >
                     <Trash2 className="h-3.5 w-3.5" />

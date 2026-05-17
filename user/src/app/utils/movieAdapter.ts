@@ -19,12 +19,13 @@ export function toMovie(m: MovieResponse): Movie {
   const backdrop = m.thumbnail ?? m.poster ?? '';
   const poster = m.poster ?? m.thumbnail ?? '';
 
-  // Derive subtitleType from real episode version data
+  // Derive subtitleType from direct API field (backend now provides this)
   let subtitleType: 'vietsub' | 'thuyetminh' | 'longtieng' | undefined;
-  const firstVersionType = m.episodes?.[0]?.episodeVersions?.[0]?.type?.toUpperCase();
-  if (firstVersionType === 'VIETSUB') subtitleType = 'vietsub';
-  else if (firstVersionType === 'THUYET_MINH') subtitleType = 'thuyetminh';
-  else if (firstVersionType === 'LONG_TIENG') subtitleType = 'longtieng';
+  const rawType = m.subtitleType ?? m.episodes?.[0]?.episodeVersions?.[0]?.type ?? '';
+  const normalizedType = rawType.toLowerCase().trim();
+  if (normalizedType === 'vietsub') subtitleType = 'vietsub';
+  else if (normalizedType === 'thuyết minh' || normalizedType === 'thuyet_minh' || normalizedType === 'thuyet minh') subtitleType = 'thuyetminh';
+  else if (normalizedType === 'lồng tiếng' || normalizedType === 'long_tieng' || normalizedType === 'long tieng') subtitleType = 'longtieng';
 
   return {
     id: String(m.id),

@@ -84,7 +84,7 @@ export default function Home() {
   }, [isAuthenticated]);
 
   // Phân loại phim (dựa trên country và genres từ API)
-  const featuredMovies = movies.slice(0, 4); // Lấy 4 phim đầu làm featured banner
+  const featuredMovies = [...movies].sort((a, b) => Number(b.id) - Number(a.id)).slice(0, 4); // 4 phim mới nhất làm banner
   const trendingMovies = movies.slice(0, 12);
   const koreanMovies = movies.filter(m => m.country === 'KR' || m.country === 'Hàn Quốc');
   const chineseMovies = movies.filter(m => m.country === 'CN' || m.country === 'Trung Quốc');

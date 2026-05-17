@@ -32,6 +32,7 @@ export interface MovieRequest {
   englishTitle?: string;
   thumbnail?: string;
   poster?: string;
+  description?: string;
   director?: string;
   releaseYear?: number;
   duration?: number;
@@ -41,6 +42,7 @@ export interface MovieRequest {
   imdbScore?: number;
   trailerUrl?: string;
   genreIds?: number[];
+  actorIds?: number[];
 }
 
 export const movieService = {
@@ -80,6 +82,20 @@ export const genreService = {
   },
   async deleteGenre(id: number): Promise<void> {
     await api.delete(`/genres/${id}`);
+  },
+};
+
+export const actorService = {
+  async getAllActors(): Promise<ActorResponse[]> {
+    const res = await api.get<ActorResponse[]>('/actors');
+    return res.data;
+  },
+  async createActor(data: { fullName: string; imageUrl?: string }): Promise<ActorResponse> {
+    const res = await api.post<ActorResponse>('/actors', data);
+    return res.data;
+  },
+  async deleteActor(id: number): Promise<void> {
+    await api.delete(`/actors/${id}`);
   },
 };
 
@@ -212,11 +228,18 @@ export interface DailyViews {
   views: number;
 }
 
+export interface DailyStat {
+  day: string;
+  revenue: number;
+  users: number;
+}
+
 export interface DashboardChartData {
   revenueByMonth: MonthlyRevenue[];
   genreDistribution: GenreCount[];
   viewsByDay: DailyViews[];
   userGrowthByMonth: MonthlyRevenue[];
+  statsByDay: DailyStat[];
 }
 
 export const dashboardService = {

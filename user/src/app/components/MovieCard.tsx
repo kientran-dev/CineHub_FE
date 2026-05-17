@@ -11,9 +11,9 @@ interface MovieCardProps {
 
 export default function MovieCard({ movie }: MovieCardProps) {
   const subtitle = movie.subtitleType
-    ? movie.subtitleType === 'vietsub' ? { type: 'Vietsub', color: 'bg-gray-600/90' }
-      : movie.subtitleType === 'longtieng' ? { type: 'Lồng tiếng', color: 'bg-gray-600/90' }
-      : { type: 'Thuyết minh', color: 'bg-gray-600/90' }
+    ? movie.subtitleType === 'vietsub'    ? { type: 'Vietsub',      color: 'bg-gray-600/90' }
+      : movie.subtitleType === 'longtieng' ? { type: 'Lồng tiếng',   color: 'bg-green-700/90' }
+      :                                      { type: 'Thuyết minh',  color: 'bg-blue-700/90' }
     : null;
 
   return (

@@ -591,14 +591,16 @@ export default function InvoicesManagement() {
     setStatusModalInvoice(null);
   };
 
-  const filteredInvoices = invoices.filter((invoice) => {
-    const matchesSearch =
-      invoice.paymentId.toString().includes(searchTerm) ||
-      (invoice.username || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (invoice.packageName || '').toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesStatus = filterStatus === 'all' || invoice.status === filterStatus;
-    return matchesSearch && matchesStatus;
-  });
+  const filteredInvoices = invoices
+    .filter((invoice) => {
+      const matchesSearch =
+        invoice.paymentId.toString().includes(searchTerm) ||
+        (invoice.username || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (invoice.packageName || '').toLowerCase().includes(searchTerm.toLowerCase());
+      const matchesStatus = filterStatus === 'all' || invoice.status === filterStatus;
+      return matchesSearch && matchesStatus;
+    })
+    .sort((a, b) => b.paymentId - a.paymentId);
 
   const totalRevenue = invoices.filter(i => i.status === 'SUCCESS').reduce((s, i) => s + i.amount, 0);
   const successCount = invoices.filter(i => i.status === 'SUCCESS').length;

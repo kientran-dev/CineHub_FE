@@ -14,7 +14,7 @@ export default function VideoPlayer() {
   const { id } = useParams();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  const { isAuthenticated, isLoading: authLoading } = useAuth();
+  const { user, isAuthenticated, isLoading: authLoading } = useAuth();
   const episodeParam = searchParams.get('episode');
   const viewRecordedRef = useRef<number | null>(null);
 
@@ -110,7 +110,8 @@ export default function VideoPlayer() {
   // ── Watch progress sync ──────────────────────────────────────────────────────
   // Ghi nhận lần đầu (watchTime = 0) khi video bắt đầu phát
   useEffect(() => {
-    if (!isAuthenticated || !currentVersion || viewRecordedRef.current === currentVersion.id) return;
+    if (!isAuthenticated || !currentVersion || !currentVersion.id) return;
+    if (viewRecordedRef.current === currentVersion.id) return;
     if (isAdPlaying) return;
 
     const recordView = async () => {
@@ -118,7 +119,7 @@ export default function VideoPlayer() {
         await historyService.saveHistory({
           episodeVersionId: currentVersion.id,
           watchTime: 0,
-          currentEpisode: currentEpisode?.episodeNumber
+          currentEpisode: currentEpisode?.episodeNumber ?? 1
         });
         viewRecordedRef.current = currentVersion.id;
       } catch (err) {
@@ -133,7 +134,7 @@ export default function VideoPlayer() {
   useEffect(() => {
     if (!isAuthenticated || !currentVersion || isAdPlaying || !movie) return;
 
-    const storageKey = `${movie.id}-${selectedEpisodeId ?? 'movie'}-${selectedVersionType}`;
+    const storageKey = `${user?.username || 'guest'}-${movie.id}-${selectedEpisodeId ?? 'movie'}-${selectedVersionType}`;
 
     const syncProgress = async () => {
       const savedTime = parseFloat(
@@ -159,6 +160,46 @@ export default function VideoPlayer() {
       syncProgress(); // Lưu lần cuối khi rời khỏi trang
     };
   }, [isAuthenticated, currentVersion, currentEpisode, isAdPlaying, movie, selectedEpisodeId, selectedVersionType]);
+
+  // ── Sync khi user đóng tab / trình duyệt / chuyển tab ────────────────────────
+  // Dùng fetch keepalive để đảm bảo request vẫn được gửi khi tab đang đóng.
+  // useEffect cleanup (ở trên) KHÔNG chạy khi user đóng tab bằng nút X.
+  useEffect(() => {
+    if (!isAuthenticated || !currentVersion || !movie) return;
+
+    const storageKey = `${user?.username || 'guest'}-${movie.id}-${selectedEpisodeId ?? 'movie'}-${selectedVersionType}`;
+
+    const syncBeacon = () => {
+      const savedTime = parseFloat(
+        localStorage.getItem(`cinehub-progress-${storageKey}`) || '0'
+      );
+      if (savedTime < 5) return;
+
+      historyService.saveHistoryBeacon({
+        episodeVersionId: currentVersion.id,
+        watchTime: Math.floor(savedTime),
+        currentEpisode: currentEpisode?.episodeNumber,
+      });
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') {
+        syncBeacon(); // Tab bị ẩn hoặc đang đóng
+      }
+    };
+
+    const handleBeforeUnload = () => {
+      syncBeacon(); // Trình duyệt đang đóng
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('beforeunload', handleBeforeUnload);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
+  }, [isAuthenticated, currentVersion, currentEpisode, movie, selectedEpisodeId, selectedVersionType, user]);
 
   // Initial trigger for Ad when first loading the movie/episode
   useEffect(() => {
@@ -318,7 +359,7 @@ export default function VideoPlayer() {
               title={movie.title}
               subtitle={subtitleLabel}
               onEnded={isSeries ? handleNextEpisode : undefined}
-              storageKey={`${movie.id}-${selectedEpisodeId ?? 'movie'}-${selectedVersionType}`}
+              storageKey={`${user?.username || 'guest'}-${movie.id}-${selectedEpisodeId ?? 'movie'}-${selectedVersionType}`}
             />
           </div>
         ) : (

@@ -39,6 +39,7 @@ export interface MovieResponse {
   country?: string;
   status?: string;
   type?: string; // "MOVIE" | "SERIES" | "TV_SHOW"
+  subtitleType?: string; // "VIETSUB" | "THUYET_MINH" | "LONG_TIENG"
   imdbScore?: number;
   trailerUrl?: string;
   averageRating?: number;

@@ -1,7 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Search, Plus, Edit, Trash2, Loader2, X } from 'lucide-react';
 import { toast } from 'sonner';
-import { movieService, genreService, type MovieResponse, type MovieRequest, type GenreResponse } from '../services/adminService';
+import { movieService, genreService, actorService, type MovieResponse, type MovieRequest, type GenreResponse, type ActorResponse } from '../services/adminService';
 import EpisodeManager from '../components/EpisodeManager';
 
 export default function MoviesManagement() {
@@ -15,16 +15,21 @@ export default function MoviesManagement() {
   const [form, setForm] = useState<Partial<MovieRequest>>({});
   const [activeTab, setActiveTab] = useState<'info' | 'episodes'>('info');
   const [genresList, setGenresList] = useState<GenreResponse[]>([]);
+  const [actorsList, setActorsList] = useState<ActorResponse[]>([]);
+  const [actorSearch, setActorSearch] = useState('');
+  const [showActorDropdown, setShowActorDropdown] = useState(false);
 
   const fetchData = async () => {
     setLoading(true);
     try {
-      const [moviesData, genresData] = await Promise.all([
+      const [moviesData, genresData, actorsData] = await Promise.all([
         movieService.getAllMovies(),
-        genreService.getAllGenres()
+        genreService.getAllGenres(),
+        actorService.getAllActors()
       ]);
       setMovies(moviesData);
       setGenresList(genresData);
+      setActorsList(actorsData);
     } catch (error) {
       console.error(error);
     } finally {
@@ -34,11 +39,13 @@ export default function MoviesManagement() {
 
   useEffect(() => { fetchData(); }, []);
 
-  const filteredMovies = movies.filter((movie) => {
-    const matchesSearch = movie.title.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesType = filterType === 'all' || movie.type === filterType;
-    return matchesSearch && matchesType;
-  });
+  const filteredMovies = movies
+    .filter((movie) => {
+      const matchesSearch = movie.title.toLowerCase().includes(searchTerm.toLowerCase());
+      const matchesType = filterType === 'all' || movie.type === filterType;
+      return matchesSearch && matchesType;
+    })
+    .sort((a, b) => b.id - a.id);
 
   const handleDelete = async (id: number) => {
     if (!confirm('Bạn có chắc chắn muốn xóa phim này?')) return;
@@ -59,6 +66,7 @@ export default function MoviesManagement() {
       englishTitle: movie.englishTitle,
       thumbnail: movie.thumbnail,
       poster: movie.poster,
+      description: movie.description,
       director: movie.director,
       releaseYear: movie.releaseYear,
       duration: movie.duration,
@@ -68,14 +76,19 @@ export default function MoviesManagement() {
       imdbScore: movie.imdbScore,
       trailerUrl: movie.trailerUrl,
       genreIds: movie.genres?.map(g => g.id) || [],
+      actorIds: movie.actors?.map(a => a.id) || [],
     });
+    setActorSearch('');
+    setShowActorDropdown(false);
     setIsModalOpen(true);
   };
 
   const handleAddNew = () => {
     setEditingMovie(null);
     setActiveTab('info');
-    setForm({ type: 'MOVIE', status: 'RELEASED', genreIds: [] });
+    setForm({ type: 'MOVIE', status: 'ĐÃ PHÁT HÀNH', genreIds: [], actorIds: [] });
+    setActorSearch('');
+    setShowActorDropdown(false);
     setIsModalOpen(true);
   };
 
@@ -216,11 +229,15 @@ export default function MoviesManagement() {
                     <td className="px-6 py-4 whitespace-nowrap text-sm">
                       {(() => {
                         const statusMap: Record<string, { label: string; color: string }> = {
+                          'ĐÃ PHÁT HÀNH': { label: 'Đã phát hành', color: 'bg-green-100 text-green-700' },
+                          'ĐANG CHIẾU': { label: 'Đang chiếu', color: 'bg-blue-100 text-blue-700' },
+                          'SẮP CHIẾU': { label: 'Sắp chiếu', color: 'bg-yellow-100 text-yellow-700' },
+                          'HOÀN THÀNH': { label: 'Hoàn thành', color: 'bg-teal-100 text-teal-700' },
                           RELEASED: { label: 'Đã phát hành', color: 'bg-green-100 text-green-700' },
-                          ONGOING:  { label: 'Đang chiếu',   color: 'bg-blue-100 text-blue-700' },
-                          UPCOMING: { label: 'Sắp chiếu',    color: 'bg-yellow-100 text-yellow-700' },
+                          ONGOING: { label: 'Đang chiếu', color: 'bg-blue-100 text-blue-700' },
+                          UPCOMING: { label: 'Sắp chiếu', color: 'bg-yellow-100 text-yellow-700' },
                         };
-                        const s = statusMap[movie.status] ?? { label: movie.status, color: 'bg-gray-100 text-gray-700' };
+                        const s = statusMap[movie.status ?? ''] ?? { label: movie.status ?? 'N/A', color: 'bg-gray-100 text-gray-700' };
                         return <span className={`px-2 py-1 rounded-full text-xs font-medium ${s.color}`}>{s.label}</span>;
                       })()}
                     </td>
@@ -250,7 +267,7 @@ export default function MoviesManagement() {
       {isModalOpen && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-lg max-w-4xl w-full p-6 max-h-[90vh] overflow-y-auto relative">
-            <button 
+            <button
               onClick={() => setIsModalOpen(false)}
               className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 transition-colors"
             >
@@ -269,130 +286,192 @@ export default function MoviesManagement() {
             </div>
 
             {activeTab === 'info' ? (
-            <form onSubmit={handleSave} className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
+              <form onSubmit={handleSave} className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Tên phim *</label>
+                    <input required value={form.title || ''} onChange={e => setForm(p => ({ ...p, title: e.target.value }))}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Tên tiếng Anh</label>
+                    <input value={form.englishTitle || ''} onChange={e => setForm(p => ({ ...p, englishTitle: e.target.value }))}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                  </div>
+                </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Tên phim *</label>
-                  <input required value={form.title || ''} onChange={e => setForm(p => ({...p, title: e.target.value}))}
+                  <label className="block text-sm font-medium text-gray-700 mb-1">URL Thumbnail</label>
+                  <input value={form.thumbnail || ''} onChange={e => setForm(p => ({ ...p, thumbnail: e.target.value }))}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Tên tiếng Anh</label>
-                  <input value={form.englishTitle || ''} onChange={e => setForm(p => ({...p, englishTitle: e.target.value}))}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
-                </div>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">URL Thumbnail</label>
-                <input value={form.thumbnail || ''} onChange={e => setForm(p => ({...p, thumbnail: e.target.value}))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">URL Poster</label>
-                <input value={form.poster || ''} onChange={e => setForm(p => ({...p, poster: e.target.value}))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">URL Trailer (YouTube)</label>
-                <input value={form.trailerUrl || ''} onChange={e => setForm(p => ({...p, trailerUrl: e.target.value}))}
-                  placeholder="https://www.youtube.com/watch?v=..."
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Đạo diễn</label>
-                  <input value={form.director || ''} onChange={e => setForm(p => ({...p, director: e.target.value}))}
+                  <label className="block text-sm font-medium text-gray-700 mb-1">URL Poster</label>
+                  <input value={form.poster || ''} onChange={e => setForm(p => ({ ...p, poster: e.target.value }))}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Quốc gia</label>
-                  <select value={form.country || ''} onChange={e => setForm(p => ({...p, country: e.target.value}))}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
-                    <option value="">Chọn quốc gia</option>
-                    <option value="Mỹ">Mỹ</option>
-                    <option value="Hàn Quốc">Hàn Quốc</option>
-                    <option value="Trung Quốc">Trung Quốc</option>
-                    <option value="Nhật Bản">Nhật Bản</option>
-                    <option value="Việt Nam">Việt Nam</option>
-                    <option value="Thái Lan">Thái Lan</option>
-                    <option value="Anh">Anh</option>
-                    <option value="Pháp">Pháp</option>
-                    <option value="Khác">Khác</option>
-                  </select>
-                </div>
-              </div>
-              <div className="grid grid-cols-3 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Năm phát hành</label>
-                  <input type="number" value={form.releaseYear || ''} onChange={e => setForm(p => ({...p, releaseYear: Number(e.target.value)}))}
+                  <label className="block text-sm font-medium text-gray-700 mb-1">URL Trailer (YouTube)</label>
+                  <input value={form.trailerUrl || ''} onChange={e => setForm(p => ({ ...p, trailerUrl: e.target.value }))}
+                    placeholder="https://www.youtube.com/watch?v=..."
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Loại phim</label>
-                  <select value={form.type || 'MOVIE'} onChange={e => setForm(p => ({...p, type: e.target.value}))}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
-                    <option value="MOVIE">Phim lẻ</option>
-                    <option value="SERIES">Phim bộ</option>
-                    <option value="TV_SHOW">TV Show</option>
-                  </select>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Mô tả phim</label>
+                  <textarea rows={3} value={form.description || ''} onChange={e => setForm(p => ({ ...p, description: e.target.value }))}
+                    placeholder="Nhập mô tả nội dung phim..."
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none" />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Đạo diễn</label>
+                    <input value={form.director || ''} onChange={e => setForm(p => ({ ...p, director: e.target.value }))}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Quốc gia</label>
+                    <select value={form.country || ''} onChange={e => setForm(p => ({ ...p, country: e.target.value }))}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                      <option value="">Chọn quốc gia</option>
+                      <option value="Mỹ">Mỹ</option>
+                      <option value="Hàn Quốc">Hàn Quốc</option>
+                      <option value="Trung Quốc">Trung Quốc</option>
+                      <option value="Nhật Bản">Nhật Bản</option>
+                      <option value="Việt Nam">Việt Nam</option>
+                      <option value="Thái Lan">Thái Lan</option>
+                      <option value="Anh">Anh</option>
+                      <option value="Pháp">Châu Âu</option>
+                      <option value="Khác">Khác</option>
+                    </select>
+                  </div>
+                </div>
+                <div className="grid grid-cols-3 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Năm phát hành</label>
+                    <input type="number" value={form.releaseYear || ''} onChange={e => setForm(p => ({ ...p, releaseYear: Number(e.target.value) }))}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Loại phim</label>
+                    <select value={form.type || 'MOVIE'} onChange={e => setForm(p => ({ ...p, type: e.target.value }))}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                      <option value="MOVIE">Phim lẻ</option>
+                      <option value="SERIES">Phim bộ</option>
+                      <option value="TV_SHOW">TV Show</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Trạng thái</label>
+                    <select value={form.status || 'ĐÃ PHÁT HÀNH'} onChange={e => setForm(p => ({ ...p, status: e.target.value }))}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                      <option value="ĐÃ PHÁT HÀNH">Đã phát hành</option>
+                      <option value="ĐANG CHIẾU">Đang chiếu</option>
+                      <option value="SẮP CHIẾU">Sắp chiếu</option>
+                      <option value="HOÀN THÀNH">Hoàn thành</option>
+                    </select>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Thời lượng (phút)</label>
+                    <input type="number" min="1" value={form.duration || ''} onChange={e => setForm(p => ({ ...p, duration: Number(e.target.value) }))}
+                      placeholder="Ví dụ: 120"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">IMDb Score</label>
+                    <input type="number" step="0.1" min="0" max="10" value={form.imdbScore || ''} onChange={e => setForm(p => ({ ...p, imdbScore: parseFloat(e.target.value) }))}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                  </div>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Trạng thái</label>
-                  <select value={form.status || 'RELEASED'} onChange={e => setForm(p => ({...p, status: e.target.value}))}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
-                    <option value="RELEASED">Đã phát hành</option>
-                    <option value="ONGOING">Đang chiếu</option>
-                    <option value="UPCOMING">Sắp chiếu</option>
-                  </select>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Thể loại phim</label>
+                  <div className="flex flex-wrap gap-2">
+                    {genresList.map(genre => {
+                      const isSelected = (form.genreIds || []).includes(genre.id);
+                      return (
+                        <button
+                          key={genre.id}
+                          type="button"
+                          onClick={() => handleToggleGenre(genre.id)}
+                          className={`px-3 py-1 text-xs rounded-full border transition-colors ${isSelected
+                              ? 'bg-blue-600 text-white border-blue-600'
+                              : 'bg-white text-gray-600 border-gray-300 hover:border-blue-400'
+                            }`}
+                        >
+                          {genre.name}
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
+                {/* Diễn viên - dạng tìm kiếm */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Thời lượng (phút)</label>
-                  <input type="number" min="1" value={form.duration || ''} onChange={e => setForm(p => ({...p, duration: Number(e.target.value)}))}
-                    placeholder="Ví dụ: 120"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Diễn viên</label>
+                  {/* Selected actors */}
+                  {(form.actorIds || []).length > 0 && (
+                    <div className="flex flex-wrap gap-2 mb-2">
+                      {(form.actorIds || []).map(actorId => {
+                        const actor = actorsList.find(a => a.id === actorId);
+                        if (!actor) return null;
+                        return (
+                          <span key={actorId} className="inline-flex items-center gap-1 px-2.5 py-1 text-xs rounded-full bg-indigo-100 text-indigo-800">
+                            {actor.fullName}
+                            <button type="button" onClick={() => setForm(p => ({ ...p, actorIds: (p.actorIds || []).filter(id => id !== actorId) }))}
+                              className="hover:text-red-600 transition-colors"><X size={12} /></button>
+                          </span>
+                        );
+                      })}
+                    </div>
+                  )}
+                  {/* Search input */}
+                  <div className="relative">
+                    <input
+                      type="text"
+                      value={actorSearch}
+                      onChange={e => { setActorSearch(e.target.value); setShowActorDropdown(true); }}
+                      onFocus={() => setShowActorDropdown(true)}
+                      placeholder="Tìm kiếm diễn viên..."
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                    {showActorDropdown && (
+                      <div className="absolute z-20 top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                        {actorsList
+                          .filter(a => !((form.actorIds || []).includes(a.id)) && a.fullName.toLowerCase().includes(actorSearch.toLowerCase()))
+                          .slice(0, 10)
+                          .map(actor => (
+                            <button
+                              key={actor.id}
+                              type="button"
+                              onClick={() => {
+                                setForm(p => ({ ...p, actorIds: [...(p.actorIds || []), actor.id] }));
+                                setActorSearch('');
+                                setShowActorDropdown(false);
+                              }}
+                              className="w-full text-left px-3 py-2 text-sm hover:bg-blue-50 flex items-center gap-2 transition-colors"
+                            >
+                              {actor.imageUrl && <img src={actor.imageUrl} alt="" className="w-6 h-6 rounded-full object-cover" />}
+                              <span>{actor.fullName}</span>
+                            </button>
+                          ))}
+                        {actorsList.filter(a => !((form.actorIds || []).includes(a.id)) && a.fullName.toLowerCase().includes(actorSearch.toLowerCase())).length === 0 && (
+                          <div className="px-3 py-2 text-xs text-gray-400">Không tìm thấy diễn viên</div>
+                        )}
+                      </div>
+                    )}
+                  </div>
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">IMDb Score</label>
-                  <input type="number" step="0.1" min="0" max="10" value={form.imdbScore || ''} onChange={e => setForm(p => ({...p, imdbScore: parseFloat(e.target.value)}))}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                <div className="flex gap-3 pt-4 border-t mt-4">
+                  <button type="button" onClick={() => setIsModalOpen(false)}
+                    className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50">
+                    Hủy
+                  </button>
+                  <button type="submit" disabled={saving}
+                    className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center justify-center gap-2">
+                    {saving && <Loader2 size={16} className="animate-spin" />}
+                    {editingMovie ? 'Cập nhật' : 'Thêm mới'}
+                  </button>
                 </div>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Thể loại phim</label>
-                <div className="flex flex-wrap gap-2">
-                  {genresList.map(genre => {
-                    const isSelected = (form.genreIds || []).includes(genre.id);
-                    return (
-                      <button
-                        key={genre.id}
-                        type="button"
-                        onClick={() => handleToggleGenre(genre.id)}
-                        className={`px-3 py-1 text-xs rounded-full border transition-colors ${
-                          isSelected 
-                            ? 'bg-blue-600 text-white border-blue-600' 
-                            : 'bg-white text-gray-600 border-gray-300 hover:border-blue-400'
-                        }`}
-                      >
-                        {genre.name}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-              <div className="flex gap-3 pt-4 border-t mt-4">
-                <button type="button" onClick={() => setIsModalOpen(false)}
-                  className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50">
-                  Hủy
-                </button>
-                <button type="submit" disabled={saving}
-                  className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center justify-center gap-2">
-                  {saving && <Loader2 size={16} className="animate-spin" />}
-                  {editingMovie ? 'Cập nhật' : 'Thêm mới'}
-                </button>
-              </div>
-            </form>
+              </form>
             ) : editingMovie ? (
               <div>
                 <EpisodeManager movieId={editingMovie.id} movieType={editingMovie.type || 'MOVIE'} />

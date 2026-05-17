@@ -7,7 +7,7 @@ export default function App() {
   return (
     <AuthProvider>
       <RouterProvider router={router} />
-      <Toaster theme="dark" position="top-right" />
+      <Toaster theme="dark" position="top-right" closeButton richColors duration={4000} />
     </AuthProvider>
   );
 }

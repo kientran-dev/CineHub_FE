@@ -9,6 +9,7 @@ export default function AccountsManagement() {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterRole, setFilterRole] = useState<'all' | 'admin' | 'user'>('all');
   const [roleModalAccount, setRoleModalAccount] = useState<UserResponse | null>(null);
+  const [confirmAction, setConfirmAction] = useState<{ account: UserResponse; makeAdmin: boolean } | null>(null);
 
   const fetchUsers = () => {
     setLoading(true);
@@ -47,7 +48,16 @@ export default function AccountsManagement() {
     }
   };
 
-  const handleRoleChange = async (account: UserResponse, makeAdmin: boolean) => {
+  const handleRoleClick = (account: UserResponse, makeAdmin: boolean) => {
+    const isCurrentlyAdmin = account.roles?.includes('ROLE_ADMIN');
+    // If clicking the role they already have, do nothing
+    if ((makeAdmin && isCurrentlyAdmin) || (!makeAdmin && !isCurrentlyAdmin)) return;
+    setConfirmAction({ account, makeAdmin });
+  };
+
+  const handleConfirmRoleChange = async () => {
+    if (!confirmAction) return;
+    const { account, makeAdmin } = confirmAction;
     try {
       if (makeAdmin) {
         await userService.grantAdmin(account.id);
@@ -56,7 +66,6 @@ export default function AccountsManagement() {
         await userService.revokeAdmin(account.id);
         toast.success(`Đã thu hồi quyền Admin của ${account.username}`);
       }
-      // Cập nhật local state
       setAccounts(prev => prev.map(a => {
         if (a.id !== account.id) return a;
         const newRoles = makeAdmin
@@ -65,6 +74,7 @@ export default function AccountsManagement() {
         return { ...a, roles: newRoles };
       }));
       setRoleModalAccount(null);
+      setConfirmAction(null);
     } catch (err: any) {
       toast.error(err?.response?.data?.message || 'Cập nhật quyền thất bại!');
     }
@@ -282,7 +292,7 @@ export default function AccountsManagement() {
               <p className="text-sm font-medium text-gray-700 mb-3">Chọn vai trò mới:</p>
               <div className="grid grid-cols-2 gap-3">
                 <button
-                  onClick={() => handleRoleChange(roleModalAccount, false)}
+                  onClick={() => handleRoleClick(roleModalAccount, false)}
                   className={`flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-all ${
                     !roleModalAccount.roles?.includes('ROLE_ADMIN')
                       ? 'border-blue-500 bg-blue-50'
@@ -296,7 +306,7 @@ export default function AccountsManagement() {
                   <span className="text-[10px] text-gray-400 text-center">Quyền người dùng cơ bản</span>
                 </button>
                 <button
-                  onClick={() => handleRoleChange(roleModalAccount, true)}
+                  onClick={() => handleRoleClick(roleModalAccount, true)}
                   className={`flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-all ${
                     roleModalAccount.roles?.includes('ROLE_ADMIN')
                       ? 'border-purple-500 bg-purple-50'
@@ -319,11 +329,53 @@ export default function AccountsManagement() {
             </div>
 
             <button
-              onClick={() => setRoleModalAccount(null)}
+              onClick={() => { setRoleModalAccount(null); setConfirmAction(null); }}
               className="w-full py-2.5 rounded-xl border border-gray-200 text-gray-600 text-sm font-medium hover:bg-gray-50 transition-colors"
             >
               Đóng
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── Confirmation Dialog ── */}
+      {confirmAction && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-[70]">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-sm w-full p-6 animate-fade-in">
+            <div className="flex items-center justify-center mb-4">
+              <div className="w-12 h-12 bg-amber-100 rounded-full flex items-center justify-center">
+                <AlertCircle size={24} className="text-amber-600" />
+              </div>
+            </div>
+            <h3 className="text-lg font-semibold text-gray-800 text-center mb-2">Xác nhận chuyển quyền</h3>
+            <p className="text-sm text-gray-600 text-center mb-5">
+              Bạn có chắc chắn muốn chuyển tài khoản <strong>{confirmAction.account.username}</strong> từ{' '}
+              <span className={`font-semibold ${confirmAction.makeAdmin ? 'text-gray-700' : 'text-purple-700'}`}>
+                {confirmAction.account.roles?.includes('ROLE_ADMIN') ? 'Admin' : 'User'}
+              </span>{' '}
+              sang{' '}
+              <span className={`font-semibold ${confirmAction.makeAdmin ? 'text-purple-700' : 'text-blue-700'}`}>
+                {confirmAction.makeAdmin ? 'Admin' : 'User'}
+              </span>?
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setConfirmAction(null)}
+                className="flex-1 py-2.5 rounded-xl border border-gray-200 text-gray-600 text-sm font-medium hover:bg-gray-50 transition-colors"
+              >
+                Hủy
+              </button>
+              <button
+                onClick={handleConfirmRoleChange}
+                className={`flex-1 py-2.5 rounded-xl text-white text-sm font-medium transition-colors ${
+                  confirmAction.makeAdmin
+                    ? 'bg-purple-600 hover:bg-purple-700'
+                    : 'bg-blue-600 hover:bg-blue-700'
+                }`}
+              >
+                Xác nhận
+              </button>
+            </div>
           </div>
         </div>
       )}
